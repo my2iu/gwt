@@ -327,6 +327,13 @@ def JsoTypeOrVar(dart_type, mixins):
       return "Js" + dart_type
     return dart_type
 
+def JavaFxTypeOrVar(dart_type, mixins):
+    if dart_type.endswith("Handler") or dart_type.endswith("Callback") or dart_type in mixins:
+      return dart_type
+    if dart_type[0].isupper() and not dart_type.startswith("Fx") and not dart_type in java_lang:
+      return "Fx" + dart_type
+    return dart_type
+
 
 class OperationInfo(object):
   """Holder for various derived information from a set of overloaded operations.

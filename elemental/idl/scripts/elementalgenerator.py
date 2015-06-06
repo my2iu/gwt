@@ -16,6 +16,7 @@ from generator_java import *
 from systembaseelemental import *
 from systemgwt import *
 from systemgwtjso import *
+from systemgwtjavafx import *
 from templateloader import TemplateLoader
 
 _logger = logging.getLogger('elementalgenerator')
@@ -241,6 +242,11 @@ class ElementalGenerator(object):
           TemplateLoader(self._template_dir, ['dom/jso', 'dom', '']),
           self._database, self._emitters, self._output_dir)
       self._systems.append(jso_system)
+    if ('gwtjavafx' in systems):
+      javafx_system = ElementalJavaFxSystem(
+          TemplateLoader(self._template_dir, ['dom/javafx', 'dom', '']),
+          self._database, self._emitters, self._output_dir)
+      self._systems.append(javafx_system)
     if ('gwt' in systems):
       interface_system = ElementalInterfacesSystem(
           TemplateLoader(self._template_dir, ['dom/interface', 'dom', '']),
