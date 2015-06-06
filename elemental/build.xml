@@ -87,7 +87,7 @@
 
   <target name="test.nongwt" if="generated" depends="compile.tests"
           description="Run tests in the JVM">
-    <run-tests output="${junit.out}/nongwt" args="" classes="**/*JreTest.class"/>
+    <run-tests output="${junit.out}/nongwt" args="" classes="**/*JreTest.class,elemental/javafx/**/*Test.class"/>
   </target>
 
   <target name="test" description="Run tests">

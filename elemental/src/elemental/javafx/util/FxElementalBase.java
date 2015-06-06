@@ -15,7 +15,10 @@
  */
 package elemental.javafx.util;
 
+import netscape.javascript.JSObject;
+
 import com.google.gwt.core.client.JavaScriptObject;
+
 import elemental.util.*;
 
 /**
@@ -23,60 +26,62 @@ import elemental.util.*;
  * Indexable, Settable, Mappable.
  */
 // TODO (cromwellian) add generic when JSO bug in gwt-dev fixed
-public class FxElementalBase extends JavaScriptObject implements Mappable, 
+// TODO(iu): do proper wrapping and unwrapping of JSObjects 
+public class FxElementalBase extends FxObject implements Mappable, 
     Indexable, IndexableInt, IndexableNumber, Settable, SettableInt, SettableNumber {
 
   protected FxElementalBase() {}
+  public FxElementalBase(JSObject obj) { super(obj); }
+  
+  public final Object /* T */ at(int index) {
+    return obj.getSlot(index);
+  }
 
-  public final native Object /* T */ at(int index) /*-{
-    return this[index];
-  }-*/;
+  public final double numberAt(int index) {
+    return ((Number)obj.getSlot(index)).doubleValue();
+  }
 
-  public final native double numberAt(int index) /*-{
-    return this[index];
-  }-*/;
+  public final int intAt(int index) {
+    return ((Number)obj.getSlot(index)).intValue();
+  }
 
-  public final native int intAt(int index) /*-{
-    return this[index];
-  }-*/;
+  public final int length() {
+    return ((Number)obj.getMember("length")).intValue();
+  }
 
-  public final native int length() /*-{
-    return this.length;
-  }-*/;
+  public final void setAt(int index, Object /* T */ value) {
+    obj.setSlot(index, value);
+  }
 
-  public final native void setAt(int index, Object /* T */ value) /*-{
-    this[index] = value;
-  }-*/;
+  public final void setAt(int index, double value) {
+    obj.setSlot(index, value);
+  }
 
-  public final native void setAt(int index, double value) /*-{
-    this[index] = value;
-  }-*/;
+  public final void setAt(int index, int value) {
+    obj.setSlot(index, value);
+  }
 
-  public final native void setAt(int index, int value) /*-{
-    this[index] = value;
-  }-*/;
+  public final Object /* T */ at(String key) {
+    return obj.getMember(key);
+  }
 
-  public final native Object /* T */ at(String key) /*-{
-    return this[key];
-  }-*/;
+  public final int intAt(String key) {
+    return ((Number)obj.getMember(key)).intValue();
+  }
 
-  public final native int intAt(String key) /*-{
-    return this[key];
-  }-*/;
+  public final double numberAt(String key) {
+    return ((Number)obj.getMember(key)).doubleValue();
+  }
 
-  public final native double numberAt(String key) /*-{
-    return this[key];
-  }-*/;
+  public final void setAt(String key, Object /* T */ value) {
+    obj.setMember(key, value);
+  }
 
-  public final native void setAt(String key, Object /* T */ value) /*-{
-    this[key] = value;
-  }-*/;
+  public final void setAt(String key, int value) {
+    obj.setMember(key, value);
+  }
 
-  public final native void setAt(String key, int value) /*-{
-    this[key] = value;
-  }-*/;
-
-  public final native void setAt(String key, double value) /*-{
-    this[key] = value;
-  }-*/;
+  public final void setAt(String key, double value) {
+    obj.setMember(key, value);
+  }
 }
