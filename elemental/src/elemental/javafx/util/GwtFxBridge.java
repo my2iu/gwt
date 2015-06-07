@@ -1,7 +1,10 @@
 package elemental.javafx.util;
 
 import java.util.WeakHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import elemental.javafx.html.FxParagraphElement;
 import netscape.javascript.JSObject;
 
 public class GwtFxBridge {
@@ -10,10 +13,32 @@ public class GwtFxBridge {
   private static WeakHashMap<JSObject, FxObject> wrappedObjects = new WeakHashMap<>();
   
   public static FxObject jsoToFx(JSObject jso) {
+    // TODO(iu): Is there a better way of doing this?
+    
+    // Try to figure out what sort of object we have
+    String result = (String)((JSObject)jso.eval("Object.prototype.toString")).call("call", new Object[]{jso});
+    Matcher classNameMatcher = Pattern.compile("\\[object\\s+(.*)\\]").matcher(result);
+    if (classNameMatcher.find()) {
+      String className = classNameMatcher.group(1);
+      switch(className) {
+        case "HTMLParagraphElement": return new FxParagraphElement(jso);
+        default: System.out.println(className); break; 
+      }
+    }
+    
+//    System.out.println(result);
+//    Object constructor = jso.getMember("constructor");
+//    if (constructor != null && constructor instanceof JSObject) {
+//      Object nameMember = ((JSObject)constructor).getMember("name");
+//      if (nameMember != null && nameMember instanceof String) {
+//        String name = (String)nameMember;
+//        System.out.println(name);
+//      }
+//    }
     return new FxElementalBase(jso);
   }
   
-  public static Object wrapJS(Object obj) {
+  public static Object wrapJs(Object obj) {
     if (obj == null) {
       return null;
     } else if (obj instanceof JSObject) {

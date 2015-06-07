@@ -319,12 +319,12 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
                                                   getter.type.id),
                                    FIELD=getter.id)
       else:
-        field = 'this.$FIELD'
+#        field = 'this.$FIELD'
 #        if getter.id in self.reserved_keywords:
 #          field_template = "this['$FIELD']"
 #        else:
 #          field_template = "this.$FIELD"
-        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return ($TYPE)obj.getMember(\"$FIELD\");\n  }\n',
+        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return ($TYPE)GwtFxBridge.wrapJs(obj.getMember(\"$FIELD\"));\n  }\n',
                                    NAME=getterName(getter),
                                    TYPE=JavaFxTypeOrVar(DartType(getter.type.id), self._mixins),
                                    FIELD=getter.id)

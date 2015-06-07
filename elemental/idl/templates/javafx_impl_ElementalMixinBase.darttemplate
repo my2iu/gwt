@@ -24,6 +24,7 @@ import elemental.dom.*;
 import elemental.html.*;
 import elemental.svg.*;
 import elemental.javafx.util.FxElementalBase;
+import elemental.javafx.util.GwtFxBridge;
 
 import netscape.javascript.JSObject;
 
