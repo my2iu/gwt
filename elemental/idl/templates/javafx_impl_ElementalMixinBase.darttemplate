@@ -25,6 +25,8 @@ import elemental.html.*;
 import elemental.svg.*;
 import elemental.javafx.util.FxElementalBase;
 
+import netscape.javascript.JSObject;
+
 import java.util.Date;
 
 /**
@@ -36,6 +38,7 @@ import java.util.Date;
   */
 public class FxElementalMixinBase $EXTENDS $IMPLEMENTS {
   protected FxElementalMixinBase() {}
+  public FxElementalMixinBase(JSObject jso) { super(jso); }
 $!MEMBERS
 
 private static class Remover implements EventRemover {

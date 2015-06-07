@@ -320,11 +320,11 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
                                    FIELD=getter.id)
       else:
         field = 'this.$FIELD'
-        if getter.id in self.reserved_keywords:
-          field_template = "this['$FIELD']"
-        else:
-          field_template = "this.$FIELD"
-        self._members_emitter.Emit('\n  public final native $TYPE $NAME() /*-{\n    return %s;\n  }-*/;\n' % field_template ,
+#        if getter.id in self.reserved_keywords:
+#          field_template = "this['$FIELD']"
+#        else:
+#          field_template = "this.$FIELD"
+        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return ($TYPE)obj.getMember(\"$FIELD\");\n  }\n',
                                    NAME=getterName(getter),
                                    TYPE=JavaFxTypeOrVar(DartType(getter.type.id), self._mixins),
                                    FIELD=getter.id)
@@ -336,11 +336,11 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
                                                     setter.type.id),
                                      FIELD=setter.id)
         else:
-          if setter.id in self.reserved_keywords:
-            field_template = "this['$FIELD']"
-          else:
-            field_template = "this.$FIELD"
-          self._members_emitter.Emit('\n  public final native void $NAME($TYPE param_$FIELD) /*-{\n    %s = param_$FIELD;\n  }-*/;\n' % field_template,
+          #if setter.id in self.reserved_keywords:
+          #  field_template = "this['$FIELD']"
+          #else:
+          #  field_template = "this.$FIELD"
+          self._members_emitter.Emit('\n  public final void $NAME($TYPE param_$FIELD) {\n    obj.setMember(\"$FIELD\", param_$FIELD);\n  }\n',
                                      NAME=setterName(setter),
                                      TYPE=TypeOrVar(DartType(setter.type.id)),
                                      FIELD=setter.id)
@@ -352,6 +352,7 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
   def AddOperation(self, info, inherited):
     """
     Arguments:
+      info - an OperationInfo object
       operations - contains the overloads, one or more operations with the same
         name.
     """
@@ -379,10 +380,11 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
 #            w('this[')
 #        else:
     args = info.ParametersAsArgumentList(self._database)
-    if info.name in self.reserved_keywords:
-      body += "this['%s'](%s" % (info.name, args)
-    else:
-      body += 'this.%s(%s' % (info.name, args)
+    body += "obj.call(\"%s\", new Object[]{%s}" % (info.name, args)
+#    if info.name in self.reserved_keywords:
+#      body += "this['%s'](%s" % (info.name, args)
+#    else:
+#      body += 'this.%s(%s' % (info.name, args)
 
 
     #if op.id is None:

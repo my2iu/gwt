@@ -31,8 +31,11 @@ import elemental.javafx.html.*;
 import elemental.javafx.css.*;
 import elemental.javafx.stylesheets.*;
 
+import netscape.javascript.JSObject;
+
 import java.util.Date;
 
 public class $ID$EXTENDS $IMPLEMENTS {
   protected $ID() {}
+  public $ID(JSObject jso) { super(jso); }
 $!MEMBERS}

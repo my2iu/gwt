@@ -33,10 +33,13 @@ import elemental.javafx.stylesheets.*;
 import elemental.javafx.svg.*;
 import elemental.svg.*;
 
+import netscape.javascript.JSObject;
+
 import java.util.Date;
 
 public class $ID$EXTENDS $IMPLEMENTS {
   protected $ID() {}
+  public $ID(JSObject jso) { super(jso); }
 
   public final native void clearOpener() /*-{
     this.opener = null;

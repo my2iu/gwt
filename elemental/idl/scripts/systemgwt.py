@@ -329,6 +329,7 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
   def AddOperation(self, info, inherited):
     """
     Arguments:
+      info - an OperationInfo object
       operations - contains the overloads, one or more operations with the same
         name.
     """
