@@ -324,10 +324,12 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
 #          field_template = "this['$FIELD']"
 #        else:
 #          field_template = "this.$FIELD"
-        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return ($TYPE)GwtFxBridge.wrapJs(obj.getMember(\"$FIELD\"));\n  }\n',
+        field_template = 'obj.getMember("%s")' % getter.id
+        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return $GETTER;\n  }\n',
                                    NAME=getterName(getter),
                                    TYPE=JavaFxTypeOrVar(DartType(getter.type.id), self._mixins),
-                                   FIELD=getter.id)
+                                   FIELD=getter.id,
+                                   GETTER=JavaFxWrapJs(JavaFxTypeOrVar(DartType(getter.type.id), self._mixins), field_template))
     if setter and not inheritedSetter:
         if setter.type.id == 'EventListener':
           self._members_emitter.Emit('\n  public final native void $NAME($TYPE listener) /*-{\n    this.$FIELD = @elemental.javafx.dom.FxElementalMixinBase::getHandlerFor(Lelemental/events/EventListener;)(listener);\n  }-*/;',
@@ -340,10 +342,12 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
           #  field_template = "this['$FIELD']"
           #else:
           #  field_template = "this.$FIELD"
-          self._members_emitter.Emit('\n  public final void $NAME($TYPE param_$FIELD) {\n    obj.setMember(\"$FIELD\", param_$FIELD);\n  }\n',
+          field_param = "param_%s" % setter.id
+          self._members_emitter.Emit('\n  public final void $NAME($TYPE param_$FIELD) {\n    obj.setMember(\"$FIELD\", $VAL);\n  }\n',
                                      NAME=setterName(setter),
                                      TYPE=TypeOrVar(DartType(setter.type.id)),
-                                     FIELD=setter.id)
+                                     FIELD=setter.id,
+                                     VAL=JavaFxUnwrapJs(JavaFxTypeOrVar(DartType(setter.type.id), self._mixins), field_param))
 
   def AddIndexer(self, element_type):
     # Interface inherits all operations from List<element_type>.
@@ -379,8 +383,8 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
 #     if info.id is None:
 #            w('this[')
 #        else:
-    args = info.ParametersAsArgumentList(self._database)
-    body += "obj.call(\"%s\", new Object[]{%s}" % (info.name, args)
+    args = info.ParametersAsJavaFxArgumentList(JavaFxUnwrapJs, self._database)
+    call = "obj.call(\"%s\", new Object[]{%s}" % (info.name, args)
 #    if info.name in self.reserved_keywords:
 #      body += "this['%s'](%s" % (info.name, args)
 #    else:
@@ -390,9 +394,12 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
     #if op.id is None:
 #            w('];\n')
 #        else:
-    body += ');'
+    call += ')'
+    if info.type_name != 'void':
+      call = JavaFxWrapJs(JavaFxTypeOrVar(info.type_name, self._mixins), call)
+    body += "%s;" % call
 
-    self._members_emitter.Emit('\n  public final native $TYPE $NAME($PARAMS) /*-{\n    $BODY\n  }-*/;\n',
+    self._members_emitter.Emit('\n  public final $TYPE $NAME($PARAMS) {\n    $BODY\n  }\n',
                                TYPE=JavaFxTypeOrVar(info.type_name, self._mixins),
                                NAME=self.fixReservedKeyWords(info.name),
                                PARAMS=info.ParametersInterfaceDeclaration(),

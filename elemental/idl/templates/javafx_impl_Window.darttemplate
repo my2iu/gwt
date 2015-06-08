@@ -35,10 +35,28 @@ import elemental.xml.*;
 import elemental.javafx.xpath.*;
 import elemental.javafx.xml.*;
 
+import netscape.javascript.JSObject;
+
 import java.util.Date;
 
 public class $ID$EXTENDS $IMPLEMENTS {
   protected $ID() {}
+  public $ID(JSObject obj) { super(obj); }
+  public static $ID wrap(Object obj) {
+    if (obj == null || "undefined".equals(obj)) {
+      return null;
+    } else if (obj instanceof JSObject) {
+      Object autoWrapped = GwtFxBridge.wrapJs(obj);
+      if (!(autoWrapped instanceof $ID)) {
+        return new $ID((JSObject)obj);
+      } else {
+        return ($ID)autoWrapped;
+      }
+    } else if (obj instanceof FxObject) {
+      return new $ID(FxObject.unwrap((FxObject)obj));
+    }
+    throw new ClassCastException("Cannot cast object to FxCounter");
+  }
 
   public final native void clearOpener() /*-{
     this.opener = null;

@@ -73,4 +73,9 @@ public class GwtFxBridge {
     }
     return null;
   }
+  
+  public static JSObject entryPoint(String method, Object callback)
+  {
+    return null;
+  }
 }

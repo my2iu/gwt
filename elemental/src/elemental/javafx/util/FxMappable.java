@@ -27,4 +27,19 @@ import elemental.util.*;
 public class FxMappable extends FxElementalBase implements Mappable {
   protected FxMappable() {}
   public FxMappable(JSObject obj) { super(obj); }
+  public static FxMappable wrap(Object obj) {
+    if (obj == null || "undefined".equals(obj)) {
+      return null;
+    } else if (obj instanceof JSObject) {
+      Object autoWrapped = GwtFxBridge.wrapJs(obj);
+      if (!(autoWrapped instanceof FxMappable)) {
+        return new FxMappable((JSObject)obj);
+      } else {
+        return (FxMappable)autoWrapped;
+      }
+    } else if (obj instanceof FxObject) {
+      return new FxMappable(FxObject.unwrap((FxObject)obj));
+    }
+    throw new ClassCastException("Cannot cast object to FxNode");
+  }  
 }

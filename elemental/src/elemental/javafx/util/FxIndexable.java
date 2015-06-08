@@ -27,4 +27,19 @@ import elemental.util.*;
 public class FxIndexable extends FxElementalBase implements Indexable {
   protected FxIndexable() {}
   public FxIndexable(JSObject obj) { super(obj); }
+  public static FxIndexable wrap(Object obj) {
+    if (obj == null || "undefined".equals(obj)) {
+      return null;
+    } else if (obj instanceof JSObject) {
+      Object autoWrapped = GwtFxBridge.wrapJs(obj);
+      if (!(autoWrapped instanceof FxIndexable)) {
+        return new FxIndexable((JSObject)obj);
+      } else {
+        return (FxIndexable)autoWrapped;
+      }
+    } else if (obj instanceof FxObject) {
+      return new FxIndexable(FxObject.unwrap((FxObject)obj));
+    }
+    throw new ClassCastException("Cannot cast object to FxNode");
+  }  
 }

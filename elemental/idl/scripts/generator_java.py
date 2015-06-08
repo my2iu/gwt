@@ -295,6 +295,28 @@ def TypeOrNothing(dart_type, info):
   else:
     return dart_type + ' '
 
+def JavaFxNameOrEntry(param, database):
+  """Returns either the name of the param, or a $entry wrapper"""
+  if param.type_id.endswith('Callback') or param.type_id.endswith('Handler'):
+    argtype = database.GetInterface(param.type_id)
+    op = argtype.operations[0]
+    jsniArgs = []
+    for arg in op.arguments:
+      if database.HasInterface(arg.type.id):
+        argface = database.GetInterface(arg.type.id)
+        # HACK: this interface is overloaded, we should fix the IDL or detect overloaded callbacks automatically
+        if param.type_id == 'DatabaseCallback' and (argface.id == 'Database' or argface.id == 'DatabaseSync'):
+          jsniArgs.append("Ljava/lang/Object;")
+        else:
+          jsniArgs.append("Lelemental/%s/%s;" % (getModule(argface.annotations), DartType(arg.type.id)))
+
+      else:
+        jsniArgs.append(primitives[DartType(arg.type.id)])
+
+    return 'GwtFxBridge.entryPoint("$entry(%s.@elemental.%s.%s::on%s(%s))", %s)' % (param.name, getModule(argtype.annotations), argtype.id, argtype.id,  ''.join(jsniArgs), param.name)
+  else:
+    return param.name
+
 def NameOrEntry(param, database):
   """Returns either the name of the param, or a $entry wrapper"""
   if param.type_id.endswith('Callback') or param.type_id.endswith('Handler'):
@@ -334,6 +356,19 @@ def JavaFxTypeOrVar(dart_type, mixins):
       return "Fx" + dart_type
     return dart_type
 
+def JavaFxWrapJs(dart_type, expression):
+    if dart_type in ("int", "float", "double", "long", "boolean", "String"):
+      return "(%s)%s" % (dart_type, expression)
+    elif dart_type.startswith("Fx"):
+      return "%s.wrap(%s)" % (dart_type, expression)
+    else:
+      return "(%s)GwtFxBridge.wrapJs(%s)" % (dart_type, expression)
+
+def JavaFxUnwrapJs(dart_type, expression):
+    if dart_type in ("int", "float", "double", "long", "boolean", "String"):
+      return expression
+    else:
+      return "GwtFxBridge.unwrapToJs(%s)" % expression
 
 class OperationInfo(object):
   """Holder for various derived information from a set of overloaded operations.
@@ -382,6 +417,14 @@ class OperationInfo(object):
     parameters as arguments.
     """
     return ', '.join(map(lambda param_info: NameOrEntry(param_info, database), self.param_infos))
+
+  def ParametersAsJavaFxArgumentList(self, paramWrapper, database):
+    """Returns a string of the parameter names suitable for passing the
+    parameters as arguments.
+    """
+    return ', '.join(map(
+        lambda param_info: paramWrapper(param_info.dart_type, JavaFxNameOrEntry(param_info, database)), 
+        self.param_infos))
 
   def _FormatParams(self, params, is_interface, type_fn):
     def FormatParam(param):

@@ -34,7 +34,7 @@ public class FxElementalBase extends FxObject implements Mappable,
   public FxElementalBase(JSObject obj) { super(obj); }
   
   public final Object /* T */ at(int index) {
-    return obj.getSlot(index);
+    return GwtFxBridge.wrapJs(obj.getSlot(index));
   }
 
   public final double numberAt(int index) {
@@ -50,7 +50,7 @@ public class FxElementalBase extends FxObject implements Mappable,
   }
 
   public final void setAt(int index, Object /* T */ value) {
-    obj.setSlot(index, value);
+    obj.setSlot(index, GwtFxBridge.unwrapToJs(value));
   }
 
   public final void setAt(int index, double value) {
@@ -62,7 +62,7 @@ public class FxElementalBase extends FxObject implements Mappable,
   }
 
   public final Object /* T */ at(String key) {
-    return obj.getMember(key);
+    return GwtFxBridge.wrapJs(obj.getMember(key));
   }
 
   public final int intAt(String key) {
@@ -74,7 +74,7 @@ public class FxElementalBase extends FxObject implements Mappable,
   }
 
   public final void setAt(String key, Object /* T */ value) {
-    obj.setMember(key, value);
+    obj.setMember(key, GwtFxBridge.unwrapToJs(value));
   }
 
   public final void setAt(String key, int value) {

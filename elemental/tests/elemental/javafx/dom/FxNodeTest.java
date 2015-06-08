@@ -27,7 +27,7 @@ public class FxNodeTest {
 
   @Test
   public void testGeneratedStringGetters() {
-    Fx.runBlankWebPageInFx((engine) -> {
+    Fx.runBlankWebPageInFx((engine) -> { 
       // Make a paragraph element with some text and see if we can read it out
       engine.executeScript("document.body.innerHTML = '<p>hello</p>'");
       FxNode node = new FxNode((JSObject)engine
@@ -48,4 +48,16 @@ public class FxNodeTest {
     }); 
   }
 
+  @Test
+  public void testGeneratedJsSetters() {
+    Fx.runBlankWebPageInFx((engine) -> {
+      // Create a new paragraph element and insert it to see if it gets inserted properly
+      FxDocument doc = new FxDocument((JSObject)engine
+          .executeScript("document"));
+      FxElement newBody = doc.createElement("BODY");
+      newBody.setTextContent("hello");
+      doc.setBody(newBody);
+      Assert.assertEquals("hello", doc.getBody().getTextContent());
+    }); 
+  }
 }

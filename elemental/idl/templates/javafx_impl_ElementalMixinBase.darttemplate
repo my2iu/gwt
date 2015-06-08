@@ -24,6 +24,7 @@ import elemental.dom.*;
 import elemental.html.*;
 import elemental.svg.*;
 import elemental.javafx.util.FxElementalBase;
+import elemental.javafx.util.FxObject;
 import elemental.javafx.util.GwtFxBridge;
 
 import netscape.javascript.JSObject;
@@ -40,6 +41,21 @@ import java.util.Date;
 public class FxElementalMixinBase $EXTENDS $IMPLEMENTS {
   protected FxElementalMixinBase() {}
   public FxElementalMixinBase(JSObject jso) { super(jso); }
+  public static $ID wrap(Object obj) {
+    if (obj == null || "undefined".equals(obj)) {
+      return null;
+    } else if (obj instanceof JSObject) {
+      Object autoWrapped = GwtFxBridge.wrapJs(obj);
+      if (!(autoWrapped instanceof $ID)) {
+        return new $ID((JSObject)obj);
+      } else {
+        return ($ID)autoWrapped;
+      }
+    } else if (obj instanceof FxObject) {
+      return new $ID(FxObject.unwrap((FxObject)obj));
+    }
+    throw new ClassCastException("Cannot cast object to FxCounter");
+  }
 $!MEMBERS
 
 private static class Remover implements EventRemover {

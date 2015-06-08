@@ -49,7 +49,7 @@ public class $ID$EXTENDS $IMPLEMENTS {
         return ($ID)autoWrapped;
       }
     } else if (obj instanceof FxObject) {
-      return new $ID(((FxObject)obj).unwrap());
+      return new $ID(FxObject.unwrap((FxObject)obj));
     }
     throw new ClassCastException("Cannot cast object to $ID");
   }

@@ -11,8 +11,8 @@ public class FxObject {
     this.obj = obj;
   }
   
-  public JSObject unwrap() {
-    return obj;
+  public static JSObject unwrap(FxObject fxobj) {
+    return fxobj.obj;
   }
   
   public static FxObject wrap(JSObject obj)
