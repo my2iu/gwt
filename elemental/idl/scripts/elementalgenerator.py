@@ -247,6 +247,10 @@ class ElementalGenerator(object):
           TemplateLoader(self._template_dir, ['dom/javafx', 'dom', '']),
           self._database, self._emitters, self._output_dir)
       self._systems.append(javafx_system)
+      javafx_util = ElementalJavaFxWrapUtil(
+          TemplateLoader(self._template_dir, ['dom/javafx', 'dom', '']),
+          self._database, self._emitters, self._output_dir)
+      self._systems.append(javafx_util)
     if ('gwt' in systems):
       interface_system = ElementalInterfacesSystem(
           TemplateLoader(self._template_dir, ['dom/interface', 'dom', '']),

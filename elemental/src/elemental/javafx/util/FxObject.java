@@ -15,10 +15,12 @@ public class FxObject {
     return fxobj.obj;
   }
   
-  public static FxObject wrap(JSObject obj)
+  public static FxObject wrap(Object obj)
   {
+    if (!(obj instanceof JSObject)) 
+      throw new ClassCastException("Can only wrap JSObject in an FxObject");
     FxObject fxObj = new FxObject();
-    fxObj.obj = obj;
+    fxObj.obj = (JSObject)obj;
     return fxObj;
   }
   

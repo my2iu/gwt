@@ -449,3 +449,77 @@ def getModule(annotations):
 
 java_lang = ['Object', 'String', 'Exception', 'DOMTimeStamp', 'DOMString']
 
+
+#--------------------------------------------------------------------
+# Special generator for creating some utility code
+
+class ElementalJavaFxWrapUtil(systembaseelemental.SystemElemental):
+
+  def __init__(self, templates, database, emitters, output_dir):
+    super(ElementalJavaFxWrapUtil, self).__init__(
+        templates, database, emitters, output_dir)
+    self._dart_interface_file_paths = []
+    self._interfaces = []
+
+  def InterfaceGenerator(self,
+                         interface,
+                         common_prefix,
+                         super_interface_name,
+                         source_filter):
+    """."""
+    if super_interface_name is not None:
+      interface_name = super_interface_name
+    else:
+      interface_name = interface.id
+
+    self._interfaces.append((interface, interface_name))
+    return None
+
+    module = getModule(interface.annotations)
+
+    template_file = 'javafx_impl_%s.darttemplate' % interface_name
+    template = self._templates.TryLoad(template_file)
+    if not template:
+      template = self._templates.Load('javafx_impl.darttemplate')
+
+    if interface_name in self._mixins or interface_name.endswith("Callback") or interface_name.endswith('Handler'):
+      return NullInterfaceGenerator(module, self._database,
+        interface, None,
+        template,
+        common_prefix, super_interface_name,
+        source_filter)
+
+    dart_interface_file_path = self._FilePathForElementalInterface(module, interface_name)
+
+    self._dart_interface_file_paths.append(dart_interface_file_path)
+
+    dart_interface_code = self._emitters.FileEmitter(dart_interface_file_path)
+
+    return ElementalInterfaceGenerator(module, self._database,
+        interface, dart_interface_code,
+        template,
+        common_prefix, super_interface_name,
+        source_filter, self._mixins)
+
+  def ProcessCallback(self, interface, info):
+    pass
+
+
+  def _FilePathForElementalInterface(self, module, interface_name):
+    """Returns the file path of the Dart interface definition."""
+    return os.path.join(self._output_dir, 'src', 'elemental', "javafx", module,
+                        'Fx%s.java' % interface_name)
+
+  def Finish(self):
+    template = self._templates.Load('javafx_impl_FxJavaWrap.darttemplate')
+    dart_interface_file_path = self._FilePathForElementalInterface('util', 'JavaWrap')
+    emitter = self._emitters.FileEmitter(dart_interface_file_path)
+    
+    cases_emitter = emitter.Emit(template)
+    for (interface, interface_name) in self._interfaces:
+      module = getModule(interface.annotations)
+      if interface_name in self._mixins or interface_name.endswith("Callback") or interface_name.endswith('Handler'):
+        continue
+      cases_emitter.Emit('\n      case "$NAME": return new $FXNAME(obj);',
+          NAME=interface.raw_js_name,
+          FXNAME='elemental.javafx.%s.Fx%s' % (module, interface.id))

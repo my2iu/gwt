@@ -1,0 +1,15 @@
+package elemental.javafx.util;
+
+import com.google.gwt.core.client.GWT;
+
+import netscape.javascript.JSObject;
+
+import java.util.Date;
+
+public class FxJavaWrap {
+  public static FxObject wrapJs(String className, JSObject obj) {
+    switch(className) {$!CASES
+      default: return new FxElementalBase(obj);
+    }
+  }
+}

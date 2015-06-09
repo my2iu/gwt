@@ -370,6 +370,7 @@ class IDLInterface(IDLNode):
       IDLParentInterface)
     self.javascript_binding_name = self.id
     self.doc_js_name = self.id
+    self.raw_js_name = self.id
     self.operations = self._convert_all(ast, 'Operation', 
       lambda ast: IDLOperation(ast, self.doc_js_name))
     self.attributes = self._convert_all(ast, 'Attribute',

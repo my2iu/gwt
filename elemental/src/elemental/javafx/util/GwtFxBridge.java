@@ -20,10 +20,7 @@ public class GwtFxBridge {
     Matcher classNameMatcher = Pattern.compile("\\[object\\s+(.*)\\]").matcher(result);
     if (classNameMatcher.find()) {
       String className = classNameMatcher.group(1);
-      switch(className) {
-        case "HTMLParagraphElement": return new FxParagraphElement(jso);
-        default: System.out.println(className); break; 
-      }
+      return FxJavaWrap.wrapJs(className, jso);
     }
     
 //    System.out.println(result);

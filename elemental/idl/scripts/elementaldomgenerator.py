@@ -125,7 +125,8 @@ def main():
   parser = optparse.OptionParser()
   parser.add_option('--systems', dest='systems',
                     action='store', type='string',
-                    default='gwt,gwtjso,gwtjavafx',
+                    #default='gwt,gwtjso,gwtjavafx',
+                    default='gwtjavafx',
                     help='Systems to generate (gwt)')
   parser.add_option('--output-dir', dest='output_dir',
                     action='store', type='string',
