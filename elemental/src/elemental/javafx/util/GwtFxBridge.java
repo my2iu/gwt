@@ -1,5 +1,7 @@
 package elemental.javafx.util;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.WeakHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -74,5 +76,36 @@ public class GwtFxBridge {
   public static JSObject entryPoint(String method, Object callback)
   {
     return null;
+  }
+  
+  /**
+   * Takes a JavaScript object that is already wrapped in an  FxObject 
+   * and rewraps it so that it will have a certain interface. In theory, this
+   * method shouldn't be necessary if 
+   */
+  public static <E> E cast(Object obj, Class<E> intf) {
+    // TODO(iu): Make a version of this that works with compiled GWT so that the
+    //     same code can be reused with JavaScriptObject and FxObject
+    if (!intf.getName().startsWith("elemental."))
+      throw new IllegalArgumentException("Can only cast to elemental interfaces");
+    if (!(obj instanceof FxObject))
+      throw new IllegalArgumentException("Expecting an FxObject");
+    
+    // Change the package prefix from elemental. to elemental.javafx. and add Fx to the class name
+    Matcher match = Pattern.compile("^elemental(.*)[.]([^.]*)$").matcher(intf.getName());
+    if (!match.find())
+      throw new IllegalArgumentException("Cannot find matching FxObject for the elemental interface");
+    String expectedFxClassName = "elemental.javafx" + match.group(1) + ".Fx" + match.group(2);
+    
+    // Take the JSObject out and wrap it using an FxObject type that implements the desired interface
+    try {
+      Class<?> fxClass = (Class<?>)Class.forName(expectedFxClassName);
+      Constructor<?> constructor = fxClass.getConstructor(JSObject.class);
+      return (E)constructor.newInstance(((FxObject)obj).obj);
+    } catch (InstantiationException | IllegalAccessException
+        | IllegalArgumentException | InvocationTargetException 
+        | ClassNotFoundException | NoSuchMethodException | SecurityException e) {
+      throw new IllegalArgumentException("Cannot find matching FxObject for the elemental interface", e);
+    }
   }
 }
