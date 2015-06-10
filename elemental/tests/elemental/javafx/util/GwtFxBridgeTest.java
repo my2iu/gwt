@@ -1,5 +1,6 @@
 package elemental.javafx.util;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,6 +12,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import elemental.dom.TimeoutHandler;
+import elemental.events.Event;
+import elemental.events.EventListener;
 import elemental.html.Location;
 import elemental.html.Window;
 import elemental.javafx.html.FxSpanElement;
@@ -97,7 +100,8 @@ public class GwtFxBridgeTest {
   
   @Test
   public void testCallbacks() {
-    final CyclicBarrier wait = new CyclicBarrier(2);
+    // Create a timeout callback, and wait for it to trigger
+    final CountDownLatch doneSignal = new CountDownLatch(1);
     final AtomicBoolean isTriggered = new AtomicBoolean();
     Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
       @Override
@@ -107,13 +111,50 @@ public class GwtFxBridgeTest {
           @Override
           public void onTimeoutHandler() {
             isTriggered.set(true);
-            Fx.awaitBarrierUninterruptibly(wait);
+            doneSignal.countDown();
           }
         }, 1);
       }
     });
-    Fx.awaitBarrierUninterruptibly(wait);
+    Fx.awaitUninterruptibly(doneSignal);
     Assert.assertTrue(isTriggered.get());
   }
   
+  @Test
+  public void testEventListenerSetter() {
+    // Set an event listener, trigger the corresponding event, and check
+    // it was triggered.
+    final CountDownLatch doneSignal = new CountDownLatch(1);
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        Window win = FxWindow.wrap(engine.executeScript("window"));
+        win.getDocument().getBody().setOnkeyup(new EventListener() {
+          @Override
+          public void handleEvent(Event evt) {
+            doneSignal.countDown();
+          }});
+        Event evt = win.getDocument().createEvent("KeyboardEvent");
+        evt.initEvent("keyup", true, false);
+        win.getDocument().getBody().dispatchEvent(evt);
+      }
+    });
+    Fx.awaitUninterruptibly(doneSignal);
+  }
+  
+  @Test
+  public void testEventListenerGetter() {
+    // See if event listeners can be round-tripped being passed into JS
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        Window win = FxWindow.wrap(engine.executeScript("window"));
+        EventListener keyUp = new EventListener() {
+          @Override
+          public void handleEvent(Event evt) {}};
+        win.getDocument().getBody().setOnkeyup(keyUp);
+        Assert.assertEquals(keyUp, win.getDocument().getBody().getOnkeyup());
+      }
+    });
+  }
 }

@@ -313,11 +313,13 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
     # you can't override methods in a JSO superclass
     if getter and not inheritedGetter:
       if getter.type.id == 'EventListener':
-        self._members_emitter.Emit('\n  public final native $TYPE $NAME() /*-{\n    return @elemental.javafx.dom.FxElementalMixinBase::getListenerFor(Lcom/google/gwt/core/client/JavaScriptObject;)(this.$FIELD);\n  }-*/;\n',
+        field_template = 'obj.getMember("%s")' % getter.id
+        self._members_emitter.Emit('\n  public final $TYPE $NAME() {\n    return $GETTER;\n  }\n',
                                    NAME=getterName(getter),
                                    TYPE=TypeOrVar(DartType(getter.type.id),
                                                   getter.type.id),
-                                   FIELD=getter.id)
+                                   FIELD=getter.id,
+                                   GETTER=JavaFxWrapJs(DartType(getter.type.id), field_template))
       else:
 #        field = 'this.$FIELD'
 #        if getter.id in self.reserved_keywords:
@@ -332,7 +334,7 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
                                    GETTER=JavaFxWrapJs(JavaFxTypeOrVar(DartType(getter.type.id), self._mixins), field_template))
     if setter and not inheritedSetter:
         if setter.type.id == 'EventListener':
-          self._members_emitter.Emit('\n  public final native void $NAME($TYPE listener) /*-{\n    this.$FIELD = @elemental.javafx.dom.FxElementalMixinBase::getHandlerFor(Lelemental/events/EventListener;)(listener);\n  }-*/;',
+          self._members_emitter.Emit('\n  public final void $NAME($TYPE listener) {\n    obj.setMember("$FIELD", GwtFxBridge.entryPoint(obj, listener, "handleEvent", elemental.events.Event.class));\n  }',
                                      NAME=setterName(setter),
                                      TYPE=TypeOrVar(DartType(setter.type.id),
                                                     setter.type.id),
@@ -474,20 +476,6 @@ class ElementalJavaFxWrapUtil(systembaseelemental.SystemElemental):
 
     self._interfaces.append((interface, interface_name))
     return None
-
-    module = getModule(interface.annotations)
-
-    template_file = 'javafx_impl_%s.darttemplate' % interface_name
-    template = self._templates.TryLoad(template_file)
-    if not template:
-      template = self._templates.Load('javafx_impl.darttemplate')
-
-    if interface_name in self._mixins or interface_name.endswith("Callback") or interface_name.endswith('Handler'):
-      return NullInterfaceGenerator(module, self._database,
-        interface, None,
-        template,
-        common_prefix, super_interface_name,
-        source_filter)
 
     dart_interface_file_path = self._FilePathForElementalInterface(module, interface_name)
 

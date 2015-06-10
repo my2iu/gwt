@@ -14,16 +14,16 @@ public class GwtFxBridge {
   // you don't have two FxObjects representing the same JS Object).
   private static WeakHashMap<JSObject, FxObject> wrappedObjects = new WeakHashMap<>();
   
-  public static FxObject jsoToFx(JSObject jso) {
+  private static String extractJsClassName(JSObject jso) {
     // TODO(iu): Is there a better way of doing this?
     
     // Try to figure out what sort of object we have
     String result = (String)((JSObject)jso.eval("Object.prototype.toString")).call("call", new Object[]{jso});
     Matcher classNameMatcher = Pattern.compile("\\[object\\s+(.*)\\]").matcher(result);
     if (classNameMatcher.find()) {
-      String className = classNameMatcher.group(1);
-      return FxJavaWrap.wrapJs(className, jso);
+      return classNameMatcher.group(1);
     }
+    return null;
     
 //    System.out.println(result);
 //    Object constructor = jso.getMember("constructor");
@@ -34,6 +34,16 @@ public class GwtFxBridge {
 //        System.out.println(name);
 //      }
 //    }
+  }
+  
+  private static FxObject jsoToFx(JSObject jso, String className) {
+    // TODO(iu): Is there a better way of doing this?
+    
+    // Try to figure out what sort of object we have
+    if (className != null) {
+      return FxJavaWrap.wrapJs(className, jso);
+    }
+    
     return new FxElementalBase(jso);
   }
   
@@ -44,7 +54,15 @@ public class GwtFxBridge {
       JSObject jso = (JSObject)obj;
       FxObject wrapped = wrappedObjects.get(jso);
       if (wrapped == null) {
-        wrapped = jsoToFx(jso);
+        String inferredClassName = extractJsClassName(jso);
+        if ("Function".equals(inferredClassName)) {
+          // Check if it a wrapped callback
+          Object javaFxCallback = jso.getMember("javaFxCallback");
+          if (javaFxCallback != null && !"undefined".equals(javaFxCallback)) {
+            return javaFxCallback;
+          }
+        }
+        wrapped = jsoToFx(jso, inferredClassName);
         wrappedObjects.put(jso, wrapped);
       }
       return wrapped;
@@ -106,7 +124,7 @@ public class GwtFxBridge {
   {
     try {
       Method m = callback.getClass().getMethod(method, methodParams);
-      Object entryPointCreator = scope.eval("(function(redirector, callback, method) { var fn = function() { redirector.call(callback, method, arguments); }; fn.javaCallback = callback; return fn; })");
+      Object entryPointCreator = scope.eval("(function(redirector, callback, method) { var fn = function() { redirector.call(callback, method, arguments); }; fn.javaFxCallback = callback; return fn; })");
       Object entryPoint = ((JSObject)entryPointCreator).call("call", new Object[] {null, redirector, callback, m});
       return (JSObject)entryPoint;
     } catch (NoSuchMethodException | SecurityException e) {

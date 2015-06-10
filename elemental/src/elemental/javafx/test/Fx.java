@@ -1,6 +1,7 @@
 package elemental.javafx.test;
 
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -16,15 +17,13 @@ import javafx.scene.web.WebView;
 public class Fx {
 
   /**
-   * Awaits on a cyclic barrier and do appropriate handling of exceptions
+   * Awaits on a latch and do appropriate handling of exceptions
    */
-  public static void awaitBarrierUninterruptibly(CyclicBarrier barrier) {
+  public static void awaitUninterruptibly(CountDownLatch latch) {
     try {
-      barrier.await();
+      latch.await();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-    } catch(BrokenBarrierException e) {
-      // Do nothing
     }
   }
   
@@ -34,7 +33,7 @@ public class Fx {
    * Exceptions from the provided code will be propagated and rethrown.
    */
   public static <E extends Throwable> void runBlankWebPageInFx(final FxWebViewTestRunnable<E> runnable) throws E {
-    CyclicBarrier wait = new CyclicBarrier(2);
+    CountDownLatch wait = new CountDownLatch(1);
     final AtomicReference<WebEngine> createdWebEngine = new AtomicReference<>();
 
     // Create a web view and load a blank page in it.
@@ -50,7 +49,7 @@ public class Fx {
               public void changed(ObservableValue<? extends State> ov,
                   State oldState, State newState) {
                 if (newState == Worker.State.SUCCEEDED) {
-                  Fx.awaitBarrierUninterruptibly(wait);
+                  wait.countDown();
                 }
               }
             });
@@ -59,7 +58,7 @@ public class Fx {
     });
     
     // Wait until the blank web page is loaded.
-    Fx.awaitBarrierUninterruptibly(wait);
+    Fx.awaitUninterruptibly(wait);
     
     // Run some code that uses that WebView
     runInFx(new FxTestRunnable<E>() {
@@ -80,7 +79,7 @@ public class Fx {
    */
   public static <E extends Throwable> void runInFx(FxTestRunnable<E> runnable) throws E {
     AtomicReference<Throwable> exceptionsThrown = new AtomicReference<>();
-    CyclicBarrier wait = new CyclicBarrier(2);
+    CountDownLatch wait = new CountDownLatch(1);
     
     new JFXPanel();
     Platform.runLater(new Runnable() {
@@ -92,13 +91,13 @@ public class Fx {
           // Save all exceptions since it's not possible to catch generic exceptions
           exceptionsThrown.set(e);
         } finally {
-          Fx.awaitBarrierUninterruptibly(wait);
+          wait.countDown();
         }
       }
     });
     
     // Wait for the code running the JavaFx thread finishes
-    Fx.awaitBarrierUninterruptibly(wait);
+    Fx.awaitUninterruptibly(wait);
     
     // Assume that exceptions are of type E or are RuntimeExceptions
     Throwable e = exceptionsThrown.get();
