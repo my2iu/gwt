@@ -16,10 +16,13 @@
 package elemental.javafx.util;
 
 import netscape.javascript.JSObject;
-
-import com.google.gwt.core.client.JavaScriptObject;
-
-import elemental.util.*;
+import elemental.util.Indexable;
+import elemental.util.IndexableInt;
+import elemental.util.IndexableNumber;
+import elemental.util.Mappable;
+import elemental.util.Settable;
+import elemental.util.SettableInt;
+import elemental.util.SettableNumber;
 
 /**
  * All Elemental classes must extend this base class, mixes in support for

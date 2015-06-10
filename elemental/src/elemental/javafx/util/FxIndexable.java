@@ -16,10 +16,7 @@
 package elemental.javafx.util;
 
 import netscape.javascript.JSObject;
-
-import com.google.gwt.core.client.JavaScriptObject;
-
-import elemental.util.*;
+import elemental.util.Indexable;
 
 /**
  */

@@ -306,14 +306,17 @@ def JavaFxNameOrEntry(param, database):
         argface = database.GetInterface(arg.type.id)
         # HACK: this interface is overloaded, we should fix the IDL or detect overloaded callbacks automatically
         if param.type_id == 'DatabaseCallback' and (argface.id == 'Database' or argface.id == 'DatabaseSync'):
-          jsniArgs.append("Ljava/lang/Object;")
+          jsniArgs.append("Object.class")
         else:
-          jsniArgs.append("Lelemental/%s/%s;" % (getModule(argface.annotations), DartType(arg.type.id)))
+          jsniArgs.append("elemental.%s.%s.class" % (getModule(argface.annotations), DartType(arg.type.id)))
 
       else:
-        jsniArgs.append(primitives[DartType(arg.type.id)])
+        jsniArgs.append(primitive_classes[DartType(arg.type.id)])
 
-    return 'GwtFxBridge.entryPoint("$entry(%s.@elemental.%s.%s::on%s(%s))", %s)' % (param.name, getModule(argtype.annotations), argtype.id, argtype.id,  ''.join(jsniArgs), param.name)
+    return ('GwtFxBridge.entryPoint(obj, %s, "on%s"%s)'
+        % (param.name, 
+            argtype.id, 
+            ''.join(map(lambda x: ', ' + x, jsniArgs))))
   else:
     return param.name
 
@@ -857,3 +860,17 @@ primitives = {
   'String' : 'Ljava/lang/String;',
   'Object' : 'Ljava/lang/Object;'
 }
+
+primitive_classes = {
+  'int' : 'Integer.TYPE',
+  'short' : 'Short.TYPE',
+  'float' : 'Float.TYPE',
+  'double' : 'Double.TYPE',
+  'byte' : 'Byte.TYPE',
+  'char' : 'Character.TYPE',
+  'long' : 'Long.TYPE',
+  'boolean' : 'Boolean.TYPE',
+  'String' : 'String.class',
+  'Object' : 'Object.class'
+}
+

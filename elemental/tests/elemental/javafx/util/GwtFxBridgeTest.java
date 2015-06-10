@@ -1,13 +1,20 @@
 package elemental.javafx.util;
 
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import javafx.scene.web.WebEngine;
 import netscape.javascript.JSObject;
 
 import org.junit.Assert;
 import org.junit.Test;
 
+import elemental.dom.TimeoutHandler;
 import elemental.html.Location;
 import elemental.html.Window;
+import elemental.javafx.html.FxSpanElement;
+import elemental.javafx.html.FxWindow;
 import elemental.javafx.test.Fx;
 import elemental.javafx.test.Fx.FxWebViewTestRunnable;
 
@@ -26,4 +33,87 @@ public class GwtFxBridgeTest {
       }
     });
   }
+  
+  @Test
+  public void testWrapJs() {
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        Assert.assertEquals(Integer.class, GwtFxBridge.wrapJs(5).getClass());
+        Assert.assertEquals(Boolean.class, GwtFxBridge.wrapJs(true).getClass());
+
+        Object obj = engine.executeScript("5.5");
+        Assert.assertEquals(Double.class, GwtFxBridge.wrapJs(obj).getClass());
+        obj = engine.executeScript("true");
+        Assert.assertEquals(Boolean.class, GwtFxBridge.wrapJs(obj).getClass());
+        obj = engine.executeScript("document.createElement('span')");
+        Assert.assertEquals(FxSpanElement.class, GwtFxBridge.wrapJs(obj).getClass());
+        // Non-elemental types map to FxElementalBase
+        obj = engine.executeScript("[]");
+        Assert.assertEquals(FxElementalBase.class, GwtFxBridge.wrapJs(obj).getClass());
+        
+        // Check that the same JSObject will map to the same FxObject
+        obj = engine.executeScript("document");
+        Object obj2 = engine.executeScript("document");
+        Assert.assertEquals(GwtFxBridge.wrapJs(obj2), GwtFxBridge.wrapJs(obj));
+      }
+    });
+  }
+  
+  @Test
+  public void testUnwrapToJs() {
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        Assert.assertEquals(Integer.class, GwtFxBridge.unwrapToJs(5).getClass());
+        Assert.assertEquals(Boolean.class, GwtFxBridge.unwrapToJs(true).getClass());
+
+        Object obj = engine.executeScript("[]");
+        Assert.assertEquals(obj, 
+            GwtFxBridge.unwrapToJs(GwtFxBridge.wrapJs(obj)));
+      }
+    });
+  }
+  
+  @Test
+  public void testEntryPoint() {
+    final AtomicInteger counter = new AtomicInteger(0);
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        TimeoutHandler incrementer = new TimeoutHandler() {
+          @Override
+          public void onTimeoutHandler() {
+            counter.incrementAndGet();
+          }};
+        
+        JSObject win = (JSObject)engine.executeScript("window");
+        JSObject entry = GwtFxBridge.entryPoint(win, incrementer, "onTimeoutHandler");
+        entry.call("call", new Object[]{});
+      }
+    });
+    Assert.assertEquals(1, counter.get());
+  }
+  
+  @Test
+  public void testCallbacks() {
+    final CyclicBarrier wait = new CyclicBarrier(2);
+    final AtomicBoolean isTriggered = new AtomicBoolean();
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        Window win = FxWindow.wrap(engine.executeScript("window"));
+        win.setTimeout(new TimeoutHandler() {
+          @Override
+          public void onTimeoutHandler() {
+            isTriggered.set(true);
+            Fx.awaitBarrierUninterruptibly(wait);
+          }
+        }, 1);
+      }
+    });
+    Fx.awaitBarrierUninterruptibly(wait);
+    Assert.assertTrue(isTriggered.get());
+  }
+  
 }

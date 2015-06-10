@@ -2,11 +2,11 @@ package elemental.javafx.util;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.WeakHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import elemental.javafx.html.FxParagraphElement;
 import netscape.javascript.JSObject;
 
 public class GwtFxBridge {
@@ -70,12 +70,48 @@ public class GwtFxBridge {
         || obj instanceof Boolean) {
       return obj;
     }
-    return null;
+    return obj;
   }
   
-  public static JSObject entryPoint(String method, Object callback)
+  public static class CallbackRedirector {
+    public Object call(Object javaCallback, Method method, JSObject jsArgs) {
+      Object[] args = new Object[method.getParameterCount()];
+      for (int n = 0; n < method.getParameterCount(); n++)
+        args[n] = wrapJs(jsArgs.getSlot(n));
+      try {
+        return unwrapToJs(method.invoke(javaCallback, args));
+      } catch (IllegalAccessException | IllegalArgumentException
+          | InvocationTargetException e) {
+        throw new IllegalArgumentException("Call to method failed", e);
+      }
+    }
+  }
+  /**
+   * Provides an object that JavaScript code can call to trigger a callback
+   * in Java-land.
+   */
+  private static CallbackRedirector redirector = new CallbackRedirector(); 
+
+  /**
+   * Creates a JS function that will call the Java callback object.
+   * 
+   * @param method method to be called on the callback object
+   * @param callback object where that should be callable from JavaScript 
+   * @param scope the JavaScript scope where the callback will be placed.
+   *     This might be needed if there are multiple browsers with multiple JavaScript
+   *     interpreters running. I'm not sure if JavaFx allows this though. 
+   * @return
+   */
+  public static JSObject entryPoint(JSObject scope, Object callback, String method, Class<?>...methodParams)
   {
-    return null;
+    try {
+      Method m = callback.getClass().getMethod(method, methodParams);
+      Object entryPointCreator = scope.eval("(function(redirector, callback, method) { var fn = function() { redirector.call(callback, method, arguments); }; fn.javaCallback = callback; return fn; })");
+      Object entryPoint = ((JSObject)entryPointCreator).call("call", new Object[] {null, redirector, callback, m});
+      return (JSObject)entryPoint;
+    } catch (NoSuchMethodException | SecurityException e) {
+      throw new IllegalArgumentException("Cannot find callback method", e);
+    }
   }
   
   /**

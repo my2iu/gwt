@@ -1,7 +1,5 @@
 package elemental.javafx.util;
 
-import com.google.gwt.core.client.JavaScriptObject;
-
 import netscape.javascript.JSObject;
 
 public class FxObject {

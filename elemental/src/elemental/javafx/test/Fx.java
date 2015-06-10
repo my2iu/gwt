@@ -14,6 +14,25 @@ import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 
 public class Fx {
+
+  /**
+   * Awaits on a cyclic barrier and do appropriate handling of exceptions
+   */
+  public static void awaitBarrierUninterruptibly(CyclicBarrier barrier) {
+    try {
+      barrier.await();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch(BrokenBarrierException e) {
+      // Do nothing
+    }
+  }
+  
+  /**
+   * Creates a blank web page in a JavaFx WebView, waits for it to initialize, 
+   * and then runs the provided code in a JavaFx thread that uses that web page.
+   * Exceptions from the provided code will be propagated and rethrown.
+   */
   public static <E extends Throwable> void runBlankWebPageInFx(final FxWebViewTestRunnable<E> runnable) throws E {
     CyclicBarrier wait = new CyclicBarrier(2);
     final AtomicReference<WebEngine> createdWebEngine = new AtomicReference<>();
@@ -31,11 +50,7 @@ public class Fx {
               public void changed(ObservableValue<? extends State> ov,
                   State oldState, State newState) {
                 if (newState == Worker.State.SUCCEEDED) {
-                  try {
-                    wait.await();
-                  } catch (InterruptedException | BrokenBarrierException e) {
-                    // Do nothing
-                  }
+                  Fx.awaitBarrierUninterruptibly(wait);
                 }
               }
             });
@@ -44,11 +59,7 @@ public class Fx {
     });
     
     // Wait until the blank web page is loaded.
-    try {
-      wait.await();
-    } catch (InterruptedException | BrokenBarrierException e) {
-      // Do nothing
-    }
+    Fx.awaitBarrierUninterruptibly(wait);
     
     // Run some code that uses that WebView
     runInFx(new FxTestRunnable<E>() {
@@ -62,7 +73,11 @@ public class Fx {
   public static interface FxWebViewTestRunnable<E extends Throwable> {
     public void run(WebEngine engine) throws E;
   }
-  
+
+  /**
+   * Initializes JavaFx (if necessary) and runs some code in the JavaFx thread.
+   * Exceptions from the provided code will be propagated and rethrown.
+   */
   public static <E extends Throwable> void runInFx(FxTestRunnable<E> runnable) throws E {
     AtomicReference<Throwable> exceptionsThrown = new AtomicReference<>();
     CyclicBarrier wait = new CyclicBarrier(2);
@@ -77,21 +92,13 @@ public class Fx {
           // Save all exceptions since it's not possible to catch generic exceptions
           exceptionsThrown.set(e);
         } finally {
-          try {
-            wait.await();
-          } catch (InterruptedException |BrokenBarrierException e) {
-            return;
-          }
+          Fx.awaitBarrierUninterruptibly(wait);
         }
       }
     });
     
     // Wait for the code running the JavaFx thread finishes
-    try {
-      wait.await();
-    } catch (InterruptedException |BrokenBarrierException e) {
-      // Eat the error and continue
-    }
+    Fx.awaitBarrierUninterruptibly(wait);
     
     // Assume that exceptions are of type E or are RuntimeExceptions
     Throwable e = exceptionsThrown.get();
