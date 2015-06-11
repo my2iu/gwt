@@ -33,7 +33,7 @@ public class Fx {
    * Exceptions from the provided code will be propagated and rethrown.
    */
   public static <E extends Throwable> void runBlankWebPageInFx(final FxWebViewTestRunnable<E> runnable) throws E {
-    CountDownLatch wait = new CountDownLatch(1);
+    final CountDownLatch wait = new CountDownLatch(1);
     final AtomicReference<WebEngine> createdWebEngine = new AtomicReference<>();
 
     // Create a web view and load a blank page in it.
@@ -82,9 +82,9 @@ public class Fx {
    * Initializes JavaFx (if necessary) and runs some code in the JavaFx thread.
    * Exceptions from the provided code will be propagated and rethrown.
    */
-  public static <E extends Throwable> void runInFx(FxTestRunnable<E> runnable) throws E {
-    AtomicReference<Throwable> exceptionsThrown = new AtomicReference<>();
-    CountDownLatch wait = new CountDownLatch(1);
+  public static <E extends Throwable> void runInFx(final FxTestRunnable<E> runnable) throws E {
+    final AtomicReference<Throwable> exceptionsThrown = new AtomicReference<>();
+    final CountDownLatch wait = new CountDownLatch(1);
     
     new JFXPanel();
     Platform.runLater(new Runnable() {
