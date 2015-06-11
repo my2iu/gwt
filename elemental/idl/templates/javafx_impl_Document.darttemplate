@@ -56,9 +56,9 @@ public class $ID$EXTENDS $IMPLEMENTS {
     throw new ClassCastException("Cannot cast object to FxCounter");
   }
 
-  public final native void clearOpener() /*-{
-    this.opener = null;
-  }-*/;
+  public final void clearOpener() {
+    obj.setMember("opener", null);
+  }
 
   public final FxElement createSvgElement(String tag) {
     return createElementNS("http://www.w3.org/2000/svg", tag).cast();

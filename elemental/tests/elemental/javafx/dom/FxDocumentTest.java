@@ -6,6 +6,7 @@ import netscape.javascript.JSObject;
 import org.junit.Assert;
 import org.junit.Test;
 
+import elemental.css.CSSStyleDeclaration;
 import elemental.javafx.test.Fx;
 import elemental.javafx.test.Fx.FxWebViewTestRunnable;
 
@@ -26,4 +27,17 @@ public class FxDocumentTest {
     });
   }
 
+  @Test
+  public void testCss() {
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        // Try setting the style of an element and reading it back.
+        FxDocument doc = new FxDocument((JSObject)engine
+            .executeScript("document"));
+        doc.getBody().getStyle().setMargin(5, CSSStyleDeclaration.Unit.EM);
+        Assert.assertEquals("5em", doc.getBody().getStyle().getMarginLeft());
+      }
+    });
+  }
 }
