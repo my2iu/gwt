@@ -11,7 +11,9 @@ import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.concurrent.Worker.State;
 import javafx.embed.swing.JFXPanel;
+import javafx.event.EventHandler;
 import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebEvent;
 import javafx.scene.web.WebView;
 
 public class Fx {
@@ -43,6 +45,11 @@ public class Fx {
         WebView browser = new WebView();
         WebEngine engine = browser.getEngine();
         createdWebEngine.set(engine);
+        engine.setOnAlert(new EventHandler<WebEvent<String>>() {
+          @Override
+          public void handle(WebEvent<String> msg) {
+            System.err.println(msg.getData());
+          }});
         engine.getLoadWorker().stateProperty().addListener(
             new ChangeListener<Worker.State>() {
               @Override

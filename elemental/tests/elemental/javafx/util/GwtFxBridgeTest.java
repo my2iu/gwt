@@ -157,4 +157,20 @@ public class GwtFxBridgeTest {
       }
     });
   }
+  
+  @Test
+  public void testNewJsObject() {
+    // Try creating a Date
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        JSObject win = (JSObject)engine.executeScript("window");
+        JSObject date = (JSObject)GwtFxBridge.newJsObject((JSObject)win.getMember("Date"));
+        Assert.assertTrue((int)date.call("getFullYear", new Object[] {}) > 2014);
+
+        date = (JSObject)GwtFxBridge.newJsObject((JSObject)win.getMember("Date"), 30.0 * 24.0 * 60.0 * 60.0 * 1000.0);
+        Assert.assertEquals(1970, (int)date.call("getFullYear", new Object[] {}));
+      }
+    });
+  }
 }

@@ -58,8 +58,8 @@ public class $ID$EXTENDS $IMPLEMENTS {
     throw new ClassCastException("Cannot cast object to FxCounter");
   }
 
-  public final native void clearOpener() /*-{
-    this.opener = null;
-  }-*/;
+  public final void clearOpener() {
+    obj.setMember("opener", null);
+  }
 
 $!MEMBERS}

@@ -40,133 +40,133 @@ public class $ID$EXTENDS $IMPLEMENTS {
   }
 
 $!MEMBERS
-public final native String getBackgroundColor() /*-{ return this.backgroundColor; }-*/;
-public final native void setBackgroundColor(String value) /*-{ this.backgroundColor = value; }-*/;
-public final native void clearBackgroundColor() /*-{ this.backgroundColor = ""; }-*/;
-public final native String getBackgroundImage() /*-{ return this.backgroundImage; }-*/;
-public final native void setBackgroundImage(String value) /*-{ this.backgroundImage = value; }-*/;
-public final native void clearBackgroundImage() /*-{ this.backgroundImage = ""; }-*/;
-public final native String getBorderColor() /*-{ return this.borderColor; }-*/;
-public final native void setBorderColor(String value) /*-{ this.borderColor = value; }-*/;
-public final native void clearBorderColor() /*-{ this.borderColor = ""; }-*/;
-public final native String getBorderStyle() /*-{ return this.borderStyle; }-*/;
-public final native void setBorderStyle(String value) /*-{ this.borderStyle = value; }-*/;
-public final native void clearBorderStyle() /*-{ this.borderStyle = ""; }-*/;
-public final native String getBorderWidth() /*-{ return this.borderWidth; }-*/;
-public final native void setBorderWidth(String value) /*-{ this.borderWidth = value; }-*/;
-public final native void clearBorderWidth() /*-{ this.borderWidth = ""; }-*/;
-public final native void setBorderWidth(double value, String unit) /*-{ this.borderWidth = value + unit; }-*/;
-public final native String getBottom() /*-{ return this.bottom; }-*/;
-public final native void setBottom(String value) /*-{ this.bottom = value; }-*/;
-public final native void clearBottom() /*-{ this.bottom = ""; }-*/;
-public final native void setBottom(double value, String unit) /*-{ this.bottom = value + unit; }-*/;
-public final native String getColor() /*-{ return this.color; }-*/;
-public final native void setColor(String value) /*-{ this.color = value; }-*/;
-public final native void clearColor() /*-{ this.color = ""; }-*/;
-public final native String getCursor() /*-{ return this.cursor; }-*/;
-public final native void setCursor(String value) /*-{ this.cursor = value; }-*/;
-public final native void clearCursor() /*-{ this.cursor = ""; }-*/;
-public final native String getDisplay() /*-{ return this.display; }-*/;
-public final native void setDisplay(String value) /*-{ this.display = value; }-*/;
-public final native void clearDisplay() /*-{ this.display = ""; }-*/;
-public final native String getFontSize() /*-{ return this.fontSize; }-*/;
-public final native void setFontSize(String value) /*-{ this.fontSize = value; }-*/;
-public final native void clearFontSize() /*-{ this.fontSize = ""; }-*/;
-public final native void setFontSize(double value, String unit) /*-{ this.fontSize = value + unit; }-*/;
-public final native String getFontStyle() /*-{ return this.fontStyle; }-*/;
-public final native void setFontStyle(String value) /*-{ this.fontStyle = value; }-*/;
-public final native void clearFontStyle() /*-{ this.fontStyle = ""; }-*/;
-public final native String getFontWeight() /*-{ return this.fontWeight; }-*/;
-public final native void setFontWeight(String value) /*-{ this.fontWeight = value; }-*/;
-public final native void clearFontWeight() /*-{ this.fontWeight = ""; }-*/;
-public final native String getHeight() /*-{ return this.height; }-*/;
-public final native void setHeight(String value) /*-{ this.height = value; }-*/;
-public final native void clearHeight() /*-{ this.height = ""; }-*/;
-public final native void setHeight(double value, String unit) /*-{ this.height = value + unit; }-*/;
-public final native String getLeft() /*-{ return this.left; }-*/;
-public final native void setLeft(String value) /*-{ this.left = value; }-*/;
-public final native void clearLeft() /*-{ this.left = ""; }-*/;
-public final native void setLeft(double value, String unit) /*-{ this.left = value + unit; }-*/;
-public final native String getListStyleType() /*-{ return this.listStyleType; }-*/;
-public final native void setListStyleType(String value) /*-{ this.listStyleType = value; }-*/;
-public final native void clearListStyleType() /*-{ this.listStyleType = ""; }-*/;
-public final native String getMargin() /*-{ return this.margin; }-*/;
-public final native void setMargin(String value) /*-{ this.margin = value; }-*/;
-public final native void clearMargin() /*-{ this.margin = ""; }-*/;
-public final native void setMargin(double value, String unit) /*-{ this.margin = value + unit; }-*/;
-public final native String getMarginBottom() /*-{ return this.marginBottom; }-*/;
-public final native void setMarginBottom(String value) /*-{ this.marginBottom = value; }-*/;
-public final native void clearMarginBottom() /*-{ this.marginBottom = ""; }-*/;
-public final native void setMarginBottom(double value, String unit) /*-{ this.marginBottom = value + unit; }-*/;
-public final native String getMarginLeft() /*-{ return this.marginLeft; }-*/;
-public final native void setMarginLeft(String value) /*-{ this.marginLeft = value; }-*/;
-public final native void clearMarginLeft() /*-{ this.marginLeft = ""; }-*/;
-public final native void setMarginLeft(double value, String unit) /*-{ this.marginLeft = value + unit; }-*/;
-public final native String getMarginRight() /*-{ return this.marginRight; }-*/;
-public final native void setMarginRight(String value) /*-{ this.marginRight = value; }-*/;
-public final native void clearMarginRight() /*-{ this.marginRight = ""; }-*/;
-public final native void setMarginRight(double value, String unit) /*-{ this.marginRight = value + unit; }-*/;
-public final native String getMarginTop() /*-{ return this.marginTop; }-*/;
-public final native void setMarginTop(String value) /*-{ this.marginTop = value; }-*/;
-public final native void clearMarginTop() /*-{ this.marginTop = ""; }-*/;
-public final native void setMarginTop(double value, String unit) /*-{ this.marginTop = value + unit; }-*/;
-public final native double getOpacity() /*-{ return this.opacity; }-*/;
-public final native void setOpacity(double value) /*-{ this.opacity = value; }-*/;
-public final native void clearOpacity() /*-{ this.opacity = ""; }-*/;
-public final native String getOverflow() /*-{ return this.overflow; }-*/;
-public final native void setOverflow(String value) /*-{ this.overflow = value; }-*/;
-public final native void clearOverflow() /*-{ this.overflow = ""; }-*/;
-public final native String getOverflowX() /*-{ return this.overflowX; }-*/;
-public final native void setOverflowX(String value) /*-{ this.overflowX = value; }-*/;
-public final native void clearOverflowX() /*-{ this.overflowX = ""; }-*/;
-public final native String getOverflowY() /*-{ return this.overflowY; }-*/;
-public final native void setOverflowY(String value) /*-{ this.overflowY = value; }-*/;
-public final native void clearOverflowY() /*-{ this.overflowY = ""; }-*/;
-public final native String getPadding() /*-{ return this.padding; }-*/;
-public final native void setPadding(String value) /*-{ this.padding = value; }-*/;
-public final native void clearPadding() /*-{ this.padding = ""; }-*/;
-public final native void setPadding(double value, String unit) /*-{ this.padding = value + unit; }-*/;
-public final native String getPaddingBottom() /*-{ return this.paddingBottom; }-*/;
-public final native void setPaddingBottom(String value) /*-{ this.paddingBottom = value; }-*/;
-public final native void clearPaddingBottom() /*-{ this.paddingBottom = ""; }-*/;
-public final native void setPaddingBottom(double value, String unit) /*-{ this.paddingBottom = value + unit; }-*/;
-public final native String getPaddingLeft() /*-{ return this.paddingLeft; }-*/;
-public final native void setPaddingLeft(String value) /*-{ this.paddingLeft = value; }-*/;
-public final native void clearPaddingLeft() /*-{ this.paddingLeft = ""; }-*/;
-public final native void setPaddingLeft(double value, String unit) /*-{ this.paddingLeft = value + unit; }-*/;
-public final native String getPaddingRight() /*-{ return this.paddingRight; }-*/;
-public final native void setPaddingRight(String value) /*-{ this.paddingRight = value; }-*/;
-public final native void clearPaddingRight() /*-{ this.paddingRight = ""; }-*/;
-public final native void setPaddingRight(double value, String unit) /*-{ this.paddingRight = value + unit; }-*/;
-public final native String getPaddingTop() /*-{ return this.paddingTop; }-*/;
-public final native void setPaddingTop(String value) /*-{ this.paddingTop = value; }-*/;
-public final native void clearPaddingTop() /*-{ this.paddingTop = ""; }-*/;
-public final native void setPaddingTop(double value, String unit) /*-{ this.paddingTop = value + unit; }-*/;
-public final native String getPosition() /*-{ return this.position; }-*/;
-public final native void setPosition(String value) /*-{ this.position = value; }-*/;
-public final native void clearPosition() /*-{ this.position = ""; }-*/;
-public final native String getRight() /*-{ return this.right; }-*/;
-public final native void setRight(String value) /*-{ this.right = value; }-*/;
-public final native void clearRight() /*-{ this.right = ""; }-*/;
-public final native void setRight(double value, String unit) /*-{ this.right = value + unit; }-*/;
-public final native String getTextDecoration() /*-{ return this.textDecoration; }-*/;
-public final native void setTextDecoration(String value) /*-{ this.textDecoration = value; }-*/;
-public final native void clearTextDecoration() /*-{ this.textDecoration = ""; }-*/;
-public final native String getTop() /*-{ return this.top; }-*/;
-public final native void setTop(String value) /*-{ this.top = value; }-*/;
-public final native void clearTop() /*-{ this.top = ""; }-*/;
-public final native void setTop(double value, String unit) /*-{ this.top = value + unit; }-*/;
-public final native String getVisibility() /*-{ return this.visibility; }-*/;
-public final native void setVisibility(String value) /*-{ this.visibility = value; }-*/;
-public final native void clearVisibility() /*-{ this.visibility = ""; }-*/;
-public final native String getWhiteSpace() /*-{ return this.whiteSpace; }-*/;
-public final native void setWhiteSpace(String value) /*-{ this.whiteSpace = value; }-*/;
-public final native void clearWhiteSpace() /*-{ this.whiteSpace = ""; }-*/;
-public final native String getWidth() /*-{ return this.width; }-*/;
-public final native void setWidth(String value) /*-{ this.width = value; }-*/;
-public final native void clearWidth() /*-{ this.width = ""; }-*/;
-public final native void setWidth(double value, String unit) /*-{ this.width = value + unit; }-*/;
-public final native int getZIndex() /*-{ return this.zIndex; }-*/;
-public final native void setZIndex(int value) /*-{ this.zIndex = value; }-*/;
-public final native void clearZIndex() /*-{ this.zIndex = ""; }-*/;
+public final String getBackgroundColor() { return (String)obj.getMember("backgroundColor"); }
+public final void setBackgroundColor(String value) { obj.setMember("backgroundColor", value); }
+public final void clearBackgroundColor() { obj.setMember("backgroundColor", ""); }
+public final String getBackgroundImage() { return (String)obj.getMember("backgroundImage"); }
+public final void setBackgroundImage(String value) { obj.setMember("backgroundImage", value); }
+public final void clearBackgroundImage() { obj.setMember("backgroundImage", ""); }
+public final String getBorderColor() { return (String)obj.getMember("borderColor"); }
+public final void setBorderColor(String value) { obj.setMember("borderColor", value); }
+public final void clearBorderColor() { obj.setMember("borderColor", ""); }
+public final String getBorderStyle() { return (String)obj.getMember("borderStyle"); }
+public final void setBorderStyle(String value) { obj.setMember("borderStyle", value); }
+public final void clearBorderStyle() { obj.setMember("borderStyle", ""); }
+public final String getBorderWidth() { return (String)obj.getMember("borderWidth"); }
+public final void setBorderWidth(String value) { obj.setMember("borderWidth", value); }
+public final void clearBorderWidth() { obj.setMember("borderWidth", ""); }
+public final void setBorderWidth(double value, String unit) { obj.setMember("borderWidth", value + unit); }
+public final String getBottom() { return (String)obj.getMember("bottom"); }
+public final void setBottom(String value) { obj.setMember("bottom", value); }
+public final void clearBottom() { obj.setMember("bottom", ""); }
+public final void setBottom(double value, String unit) { obj.setMember("bottom", value + unit); }
+public final String getColor() { return (String)obj.getMember("color"); }
+public final void setColor(String value) { obj.setMember("color", value); }
+public final void clearColor() { obj.setMember("color", ""); }
+public final String getCursor() { return (String)obj.getMember("cursor"); }
+public final void setCursor(String value) { obj.setMember("cursor", value); }
+public final void clearCursor() { obj.setMember("cursor", ""); }
+public final String getDisplay() { return (String)obj.getMember("display"); }
+public final void setDisplay(String value) { obj.setMember("display", value); }
+public final void clearDisplay() { obj.setMember("display", ""); }
+public final String getFontSize() { return (String)obj.getMember("fontSize"); }
+public final void setFontSize(String value) { obj.setMember("fontSize", value); }
+public final void clearFontSize() { obj.setMember("fontSize", ""); }
+public final void setFontSize(double value, String unit) { obj.setMember("fontSize", value + unit); }
+public final String getFontStyle() { return (String)obj.getMember("fontStyle"); }
+public final void setFontStyle(String value) { obj.setMember("fontStyle", value); }
+public final void clearFontStyle() { obj.setMember("fontStyle", ""); }
+public final String getFontWeight() { return (String)obj.getMember("fontWeight"); }
+public final void setFontWeight(String value) { obj.setMember("fontWeight", value); }
+public final void clearFontWeight() { obj.setMember("fontWeight", ""); }
+public final String getHeight() { return (String)obj.getMember("height"); }
+public final void setHeight(String value) { obj.setMember("height", value); }
+public final void clearHeight() { obj.setMember("height", ""); }
+public final void setHeight(double value, String unit) { obj.setMember("height", value + unit); }
+public final String getLeft() { return (String)obj.getMember("left"); }
+public final void setLeft(String value) { obj.setMember("left", value); }
+public final void clearLeft() { obj.setMember("left", ""); }
+public final void setLeft(double value, String unit) { obj.setMember("left", value + unit); }
+public final String getListStyleType() { return (String)obj.getMember("listStyleType"); }
+public final void setListStyleType(String value) { obj.setMember("listStyleType", value); }
+public final void clearListStyleType() { obj.setMember("listStyleType", ""); }
+public final String getMargin() { return (String)obj.getMember("margin"); }
+public final void setMargin(String value) { obj.setMember("margin", value); }
+public final void clearMargin() { obj.setMember("margin", ""); }
+public final void setMargin(double value, String unit) { obj.setMember("margin", value + unit); }
+public final String getMarginBottom() { return (String)obj.getMember("marginBottom"); }
+public final void setMarginBottom(String value) { obj.setMember("marginBottom", value); }
+public final void clearMarginBottom() { obj.setMember("marginBottom", ""); }
+public final void setMarginBottom(double value, String unit) { obj.setMember("marginBottom", value + unit); }
+public final String getMarginLeft() { return (String)obj.getMember("marginLeft"); }
+public final void setMarginLeft(String value) { obj.setMember("marginLeft", value); }
+public final void clearMarginLeft() { obj.setMember("marginLeft", ""); }
+public final void setMarginLeft(double value, String unit) { obj.setMember("marginLeft", value + unit); }
+public final String getMarginRight() { return (String)obj.getMember("marginRight"); }
+public final void setMarginRight(String value) { obj.setMember("marginRight", value); }
+public final void clearMarginRight() { obj.setMember("marginRight", ""); }
+public final void setMarginRight(double value, String unit) { obj.setMember("marginRight", value + unit); }
+public final String getMarginTop() { return (String)obj.getMember("marginTop"); }
+public final void setMarginTop(String value) { obj.setMember("marginTop", value); }
+public final void clearMarginTop() { obj.setMember("marginTop", ""); }
+public final void setMarginTop(double value, String unit) { obj.setMember("marginTop", value + unit); }
+public final double getOpacity() { return (double)obj.getMember("opacity"); }
+public final void setOpacity(double value) { obj.setMember("opacity", value); }
+public final void clearOpacity() { obj.setMember("opacity", ""); }
+public final String getOverflow() { return (String)obj.getMember("overflow"); }
+public final void setOverflow(String value) { obj.setMember("overflow", value); }
+public final void clearOverflow() { obj.setMember("overflow", ""); }
+public final String getOverflowX() { return (String)obj.getMember("overflowX"); }
+public final void setOverflowX(String value) { obj.setMember("overflowX", value); }
+public final void clearOverflowX() { obj.setMember("overflowX", ""); }
+public final String getOverflowY() { return (String)obj.getMember("overflowY"); }
+public final void setOverflowY(String value) { obj.setMember("overflowY", value); }
+public final void clearOverflowY() { obj.setMember("overflowY", ""); }
+public final String getPadding() { return (String)obj.getMember("padding"); }
+public final void setPadding(String value) { obj.setMember("padding", value); }
+public final void clearPadding() { obj.setMember("padding", ""); }
+public final void setPadding(double value, String unit) { obj.setMember("padding", value + unit); }
+public final String getPaddingBottom() { return (String)obj.getMember("paddingBottom"); }
+public final void setPaddingBottom(String value) { obj.setMember("paddingBottom", value); }
+public final void clearPaddingBottom() { obj.setMember("paddingBottom", ""); }
+public final void setPaddingBottom(double value, String unit) { obj.setMember("paddingBottom", value + unit); }
+public final String getPaddingLeft() { return (String)obj.getMember("paddingLeft"); }
+public final void setPaddingLeft(String value) { obj.setMember("paddingLeft", value); }
+public final void clearPaddingLeft() { obj.setMember("paddingLeft", ""); }
+public final void setPaddingLeft(double value, String unit) { obj.setMember("paddingLeft", value + unit); }
+public final String getPaddingRight() { return (String)obj.getMember("paddingRight"); }
+public final void setPaddingRight(String value) { obj.setMember("paddingRight", value); }
+public final void clearPaddingRight() { obj.setMember("paddingRight", ""); }
+public final void setPaddingRight(double value, String unit) { obj.setMember("paddingRight", value + unit); }
+public final String getPaddingTop() { return (String)obj.getMember("paddingTop"); }
+public final void setPaddingTop(String value) { obj.setMember("paddingTop", value); }
+public final void clearPaddingTop() { obj.setMember("paddingTop", ""); }
+public final void setPaddingTop(double value, String unit) { obj.setMember("paddingTop", value + unit); }
+public final String getPosition() { return (String)obj.getMember("position"); }
+public final void setPosition(String value) { obj.setMember("position", value); }
+public final void clearPosition() { obj.setMember("position", ""); }
+public final String getRight() { return (String)obj.getMember("right"); }
+public final void setRight(String value) { obj.setMember("right", value); }
+public final void clearRight() { obj.setMember("right", ""); }
+public final void setRight(double value, String unit) { obj.setMember("right", value + unit); }
+public final String getTextDecoration() { return (String)obj.getMember("textDecoration"); }
+public final void setTextDecoration(String value) { obj.setMember("textDecoration", value); }
+public final void clearTextDecoration() { obj.setMember("textDecoration", ""); }
+public final String getTop() { return (String)obj.getMember("top"); }
+public final void setTop(String value) { obj.setMember("top", value); }
+public final void clearTop() { obj.setMember("top", ""); }
+public final void setTop(double value, String unit) { obj.setMember("top", value + unit); }
+public final String getVisibility() { return (String)obj.getMember("visibility"); }
+public final void setVisibility(String value) { obj.setMember("visibility", value); }
+public final void clearVisibility() { obj.setMember("visibility", ""); }
+public final String getWhiteSpace() { return (String)obj.getMember("whiteSpace"); }
+public final void setWhiteSpace(String value) { obj.setMember("whiteSpace", value); }
+public final void clearWhiteSpace() { obj.setMember("whiteSpace", ""); }
+public final String getWidth() { return (String)obj.getMember("width"); }
+public final void setWidth(String value) { obj.setMember("width", value); }
+public final void clearWidth() { obj.setMember("width", ""); }
+public final void setWidth(double value, String unit) { obj.setMember("width", value + unit); }
+public final int getZIndex() { return (int)obj.getMember("zIndex"); }
+public final void setZIndex(int value) { obj.setMember("zIndex", value); }
+public final void clearZIndex() { obj.setMember("zIndex", ""); }
 }

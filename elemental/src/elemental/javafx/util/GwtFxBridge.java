@@ -47,6 +47,10 @@ public class GwtFxBridge {
     return new FxElementalBase(jso);
   }
   
+  /**
+   * Takes an object from the JS interpreter and wraps it with an
+   * appropriate Java object if necessary
+   */
   public static Object wrapJs(Object obj) {
     if (obj == null) {
       return null;
@@ -78,6 +82,11 @@ public class GwtFxBridge {
     return null;
   }
   
+  /**
+   * Takes a Java object and converts it for use in a JS interpreter. If the
+   * Java object is simply a wrapped JS object, it will be unwrapped and the 
+   * JS object returned.
+   */
   public static Object unwrapToJs(Object obj) {
     if (obj == null) {
       return null;
@@ -104,6 +113,7 @@ public class GwtFxBridge {
       }
     }
   }
+  
   /**
    * Provides an object that JavaScript code can call to trigger a callback
    * in Java-land.
@@ -131,7 +141,24 @@ public class GwtFxBridge {
       throw new IllegalArgumentException("Cannot find callback method", e);
     }
   }
-  
+
+  /**
+   * Calls new on a JS constructor function to create a new object.
+   */
+  public static JSObject newJsObject(JSObject constructor, Object...args) {
+    // TODO(iu): This seems to work fine with some objects, like Date, but not with others, like Uint8Array (Webkit's Uint8Array does not seem to be a function)
+    JSObject constructorBinder = (JSObject)
+        constructor.eval("(function(constructor) { var f = constructor.bind.apply(constructor, arguments); return new f(); })");
+    Object[] shiftedArgs = new Object[args.length + 2];
+    for (int n = 0; n < args.length; n++) {
+      shiftedArgs[n + 2] = args[n];
+    }
+    shiftedArgs[0] = constructor;
+    shiftedArgs[1] = constructor;
+    
+    return (JSObject)constructorBinder.call("call", shiftedArgs);
+  }
+
   /**
    * Takes a JavaScript object that is already wrapped in an  FxObject 
    * and rewraps it so that it will have a certain interface. In theory, this
@@ -162,4 +189,5 @@ public class GwtFxBridge {
       throw new IllegalArgumentException("Cannot find matching FxObject for the elemental interface", e);
     }
   }
+  
 }

@@ -286,24 +286,27 @@ class ElementalInterfaceGenerator(systembaseelemental.ElementalBase):
          if element_type:
            self._members_emitter.Emit(
            '\n'
-           '  public final native Fx$TYPE new$CTOR(int length) /*-{ return new $TYPE(length); }-*/;\n'
+           '  public final Fx$TYPE new$CTOR(int length) { return Fx$TYPE.wrap(((JSObject)obj.eval("(function(arg1){ return new $TYPE(arg1); })")).call("call", new Object[] {obj, length})); }\n'
            '\n'
-           '  public final native Fx$TYPE new$CTOR(IndexableNumber list) /*-{ return new $TYPE(list); }-*/;\n'
+           '  public final Fx$TYPE new$CTOR(IndexableNumber list) { return Fx$TYPE.wrap(((JSObject)obj.eval("(function(arg1){ return new $TYPE(arg1); })")).call("call", new Object[] {obj, GwtFxBridge.unwrapToJs(list)})); }\n'
            '\n'
-           '  public final native Fx$TYPE new$CTOR(ArrayBuffer buffer,'
-           ' int byteOffset, int length) /*-{ return new $TYPE(buffer, byteOffset, length); }-*/;\n',
+           '  public final Fx$TYPE new$CTOR(ArrayBuffer buffer,'
+           ' int byteOffset, int length) { return Fx$TYPE.wrap(((JSObject)obj.eval("(function(arg1,arg2,arg3){ return new $TYPE(arg1,arg2,arg3); })")).call("call", new Object[] {obj, GwtFxBridge.unwrapToJs(buffer), byteOffset, length})); }\n',
            CTOR=iface.id,
            TYPE=iface.id)
          constructor_info = AnalyzeConstructor(iface)
          if constructor_info:
+           args = constructor_info.ParametersAsJavaFxArgumentList(JavaFxUnwrapJs, self._database);
+           chainedArgs = ','.join(map(lambda x: 'arg' + str(x), range(len(constructor_info.param_infos))))
            self._members_emitter.Emit(
              '\n'
-             '  public final native Fx$TYPE new$CTOR($PARAMS) /*-{ return new $JSTYPE($ARGS); }-*/;\n',
+             '  public final Fx$TYPE new$CTOR($PARAMS) { return Fx$TYPE.wrap(((JSObject)obj.eval("(function($CHAINEDARGS){ return new $TYPE($CHAINEDARGS); })")).call("call", new Object[] {obj, $ARGS})); }\n',
              TYPE=iface.id,
              CTOR=iface.id,
              JSTYPE=JsType(iface.id),
              PARAMS=constructor_info.ParametersInterfaceDeclaration(),
-             ARGS=constructor_info.ParametersAsArgumentList(self._database));
+             CHAINEDARGS=chainedArgs,
+             ARGS=args);
 
 
   def AddConstant(self, constant):
