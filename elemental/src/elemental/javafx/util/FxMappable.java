@@ -15,12 +15,15 @@
  */
 package elemental.javafx.util;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import netscape.javascript.JSObject;
 import elemental.util.Mappable;
 
 /**
  */
 // TODO (cromwellian) add generic when JSO bug in gwt-dev fixed
+@GwtIncompatible
 public class FxMappable extends FxElementalBase implements Mappable {
   protected FxMappable() {}
   public FxMappable(JSObject obj) { super(obj); }

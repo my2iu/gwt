@@ -17,6 +17,7 @@ package $PACKAGE;
 $IMPORTS
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.core.client.JavaScriptObject;
+import com.google.gwt.core.shared.GwtIncompatible;
 
 import elemental.events.*;
 import elemental.util.*;
@@ -38,6 +39,7 @@ import java.util.Date;
   * may implement a given interface, we hoist all of the explicit
   * mixin classes into a base JSO used by all of elemental.
   */
+@GwtIncompatible
 public class FxElementalMixinBase $EXTENDS $IMPLEMENTS {
   protected FxElementalMixinBase() {}
   public FxElementalMixinBase(JSObject jso) { super(jso); }

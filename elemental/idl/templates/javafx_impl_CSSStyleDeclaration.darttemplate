@@ -2,6 +2,7 @@ package $PACKAGE;
 $IMPORTS
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.core.client.JavaScriptObject;
+import com.google.gwt.core.shared.GwtIncompatible;
 
 import elemental.events.*;
 import elemental.util.*;
@@ -20,6 +21,7 @@ import netscape.javascript.JSObject;
 
 import java.util.Date;
 
+@GwtIncompatible
 public class $ID$EXTENDS $IMPLEMENTS {
   protected $ID() {}
   public $ID(JSObject obj) { super(obj); }

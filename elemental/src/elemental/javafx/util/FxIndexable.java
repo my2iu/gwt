@@ -15,12 +15,15 @@
  */
 package elemental.javafx.util;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import netscape.javascript.JSObject;
 import elemental.util.Indexable;
 
 /**
  */
 // TODO (cromwellian) add generic when JSO bug in gwt-dev fixed
+@GwtIncompatible
 public class FxIndexable extends FxElementalBase implements Indexable {
   protected FxIndexable() {}
   public FxIndexable(JSObject obj) { super(obj); }

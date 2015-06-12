@@ -1,11 +1,13 @@
 package elemental.javafx.util;
 
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.core.shared.GwtIncompatible;
 
 import netscape.javascript.JSObject;
 
 import java.util.Date;
 
+@GwtIncompatible
 public class FxJavaWrap {
   public static FxObject wrapJs(String className, JSObject obj) {
     switch(className) {$!CASES

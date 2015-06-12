@@ -15,6 +15,8 @@
  */
 package elemental.javafx.util;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import netscape.javascript.JSObject;
 import elemental.util.Indexable;
 import elemental.util.IndexableInt;
@@ -30,6 +32,7 @@ import elemental.util.SettableNumber;
  */
 // TODO (cromwellian) add generic when JSO bug in gwt-dev fixed
 // TODO(iu): do proper wrapping and unwrapping of JSObjects 
+@GwtIncompatible
 public class FxElementalBase extends FxObject implements Mappable, 
     Indexable, IndexableInt, IndexableNumber, Settable, SettableInt, SettableNumber {
 

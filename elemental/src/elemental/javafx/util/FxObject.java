@@ -1,7 +1,10 @@
 package elemental.javafx.util;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import netscape.javascript.JSObject;
 
+@GwtIncompatible
 public class FxObject {
   protected JSObject obj;
   

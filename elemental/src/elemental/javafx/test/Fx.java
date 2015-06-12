@@ -3,6 +3,8 @@ package elemental.javafx.test;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -14,6 +16,7 @@ import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebEvent;
 import javafx.scene.web.WebView;
 
+@GwtIncompatible
 public class Fx {
 
   /**

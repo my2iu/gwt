@@ -7,8 +7,11 @@ import java.util.WeakHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.gwt.core.shared.GwtIncompatible;
+
 import netscape.javascript.JSObject;
 
+@GwtIncompatible
 public class GwtFxBridge {
   // Keeps track of JS objects that already have a Java wrapper (so that
   // you don't have two FxObjects representing the same JS Object).
