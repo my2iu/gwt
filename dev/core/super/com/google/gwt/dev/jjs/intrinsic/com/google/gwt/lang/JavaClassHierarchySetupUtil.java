@@ -17,6 +17,8 @@ package com.google.gwt.lang;
 
 import com.google.gwt.core.client.JavaScriptObject;
 
+import javaemul.internal.annotations.ForceInline;
+
 /**
  * Utility class for defining class prototyes to setup an equivalent to the Java class hierarchy in
  * JavaScript.
@@ -151,7 +153,15 @@ public class JavaClassHierarchySetupUtil {
   public static native JavaScriptObject makeLambdaFunction(JavaScriptObject samMethod,
       JavaScriptObject instance) /*-{
     var lambda = function() { return samMethod.apply(lambda, arguments); }
-    lambda.__proto__ = instance;
+
+    if (lambda.__proto__) {
+      lambda.__proto__ = instance;
+    } else {
+      for (var prop in instance) {
+        lambda[prop] = instance[prop];
+      }
+    }
+
     return lambda;
   }-*/;
 
@@ -201,24 +211,8 @@ public class JavaClassHierarchySetupUtil {
   static native void emptyMethod() /*-{
   }-*/;
 
+  @ForceInline
   static native JavaScriptObject uniqueId(String id) /*-{
     return jsinterop.closure.getUniqueId(id);
-  }-*/;
-
-  /**
-   * Converts an input object (LongEmul) to a double, otherwise return the value.
-   */
-  public static native Object coerceToLong(Object o) /*-{
-    if (typeof(o) == 'number') {
-      return @com.google.gwt.lang.LongLib::fromDouble(D)(o);
-    }
-    return o;
-  }-*/;
-
-  /**
-   * Convert a double to a long.
-   */
-  public static native Object coerceFromLong(Object o) /*-{
-    return @com.google.gwt.lang.LongLib::toDouble(Lcom/google/gwt/lang/LongLibBase$LongEmul;)(o);
   }-*/;
 }

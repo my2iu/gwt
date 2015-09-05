@@ -27,6 +27,7 @@ import com.google.gwt.dev.javac.testing.impl.JavaResourceBase;
 import com.google.gwt.dev.javac.testing.impl.MockJavaResource;
 import com.google.gwt.dev.javac.testing.impl.MockResource;
 import com.google.gwt.dev.jjs.JsOutputOption;
+import com.google.gwt.dev.jjs.impl.JjsUtils;
 import com.google.gwt.dev.util.Util;
 import com.google.gwt.dev.util.arg.OptionJsInteropMode;
 import com.google.gwt.dev.util.arg.SourceLevel;
@@ -950,6 +951,70 @@ public class CompilerTest extends ArgProcessorTestBase {
         new MinimalRebuildCache(), emptySet, JsOutputOption.OBFUSCATED);
   }
 
+   /**
+   * Test that some lightly referenced interface through a @JsFunction is included in the output.
+   */
+  public void testReferenceThroughJsFunction() throws Exception {
+    MockJavaResource someJsFunction =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.SomeJsFunction",
+            "package com.foo;",
+            "import com.google.gwt.core.client.js.JsFunction;",
+            "@JsFunction",
+            "public interface SomeJsFunction {",
+            "  void m();",
+            "}");
+
+    MockJavaResource jsFunctionInterfaceImplementation =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.Impl",
+            "package com.foo;",
+            "public class Impl implements SomeJsFunction {",
+            "  public void m() { SomeInterface.class.getName(); } ",
+            "}");
+
+    MockJavaResource someInterface =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.SomeInterface",
+            "package com.foo;",
+            "public interface SomeInterface {",
+            "}");
+
+    MockJavaResource testEntryPoint =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.TestEntryPoint",
+            "package com.foo;",
+            "import com.google.gwt.core.client.EntryPoint;",
+            "public class TestEntryPoint implements EntryPoint {",
+            "  private static native void f(SomeJsFunction f) /*-{}-*/;",
+            "  public void onModuleLoad() {",
+                // Create Impl and pass it to JS but do not explicitly call m
+            "    f(new Impl());",
+            "  }",
+            "}");
+
+    MockResource moduleResource =
+        JavaResourceBase.createMockResource(
+            "com/foo/TestEntryPoint.gwt.xml",
+            "<module>",
+            "  <source path=''/>",
+            "  <entry-point class='com.foo.TestEntryPoint'/>",
+            "</module>");
+
+    CompilerOptions compilerOptions = new CompilerOptionsImpl();
+    compilerOptions.setJsInteropMode(OptionJsInteropMode.Mode.JS);
+    String js = compileToJs(compilerOptions, Files.createTempDir(), testEntryPoint.getTypeName(),
+        Lists.newArrayList(moduleResource, testEntryPoint, someJsFunction,
+            jsFunctionInterfaceImplementation, someInterface),
+        new MinimalRebuildCache(), emptySet, JsOutputOption.DETAILED);
+    // Make sure the referenced class literals ends up beign included in the resulting JS.
+    String classliteralHolderVarName =
+        JjsUtils.mangleMemberName("com.google.gwt.lang.ClassLiteralHolder",
+        JjsUtils.classLiteralFieldNameFromJavahTypeSignatureName(
+            JjsUtils.javahSignatureFromName(someInterface.getTypeName())));
+    assertTrue(js.contains("var " + classliteralHolderVarName + " = "));
+  }
+
   public void testJsInteropNameCollision() throws Exception {
     MinimalRebuildCache minimalRebuildCache = new MinimalRebuildCache();
     File applicationDir = Files.createTempDir();
@@ -1071,9 +1136,20 @@ public class CompilerTest extends ArgProcessorTestBase {
         relinkMinimalRebuildCache.getProcessedStaleTypeNames().contains("com.foo.Bottom$Value"));
   }
 
-  public void testIncrementalRecompile_superClassOrder() throws UnableToCompleteException,
-      IOException,
-      InterruptedException {
+  public void testIncrementalRecompile_classLiteralNewReference()
+      throws UnableToCompleteException, IOException, InterruptedException {
+    checkIncrementalRecompile_classLiteralNewReference(JsOutputOption.OBFUSCATED);
+    checkIncrementalRecompile_classLiteralNewReference(JsOutputOption.DETAILED);
+  }
+
+  public void testIncrementalRecompile_primitiveClassLiteralReference()
+      throws UnableToCompleteException, IOException, InterruptedException {
+    checkIncrementalRecompile_primitiveClassLiteralReference(JsOutputOption.OBFUSCATED);
+    checkIncrementalRecompile_primitiveClassLiteralReference(JsOutputOption.DETAILED);
+  }
+
+  public void testIncrementalRecompile_superClassOrder()
+      throws UnableToCompleteException, IOException, InterruptedException {
     // Linked output is sorted alphabetically except that super-classes come before sub-classes. If
     // on recompile a sub-class -> super-class relationship is lost then a sub-class with an
     // alphabetically earlier name might start linking out before the super-class.
@@ -1081,9 +1157,8 @@ public class CompilerTest extends ArgProcessorTestBase {
     checkIncrementalRecompile_superClassOrder(JsOutputOption.DETAILED);
   }
 
-  public void testIncrementalRecompile_superFromStaleInner() throws UnableToCompleteException,
-      IOException,
-      InterruptedException {
+  public void testIncrementalRecompile_superFromStaleInner()
+      throws UnableToCompleteException, IOException, InterruptedException {
     checkIncrementalRecompile_superFromStaleInner(JsOutputOption.OBFUSCATED);
     checkIncrementalRecompile_superFromStaleInner(JsOutputOption.DETAILED);
   }
@@ -1440,6 +1515,111 @@ public class CompilerTest extends ArgProcessorTestBase {
         output);
   }
 
+  public void checkIncrementalRecompile_classLiteralNewReference(JsOutputOption output)
+      throws UnableToCompleteException, IOException, InterruptedException {
+    MockJavaResource interfaceA =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.A",
+            "package com.foo;",
+            "interface A {",
+            " static String b = \"\";",
+            "}");
+
+    MockJavaResource classBSansLiteralReference =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.B",
+            "package com.foo;",
+            "public class B {",
+            "}");
+
+    MockJavaResource classBWithLiteralReference =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.B",
+            "package com.foo;",
+            "public class B {",
+            "  public B() { Class c = A.class; }",
+            "}");
+
+    MockJavaResource classC =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.C",
+            "package com.foo;",
+            "import com.google.gwt.core.client.EntryPoint;",
+            "public class C implements EntryPoint {",
+            "  public void onModuleLoad() {",
+            "    if (A.b == null) ",
+            "      new B();",
+            "  }",
+            "}");
+
+    MockResource moduleResource =
+        JavaResourceBase.createMockResource(
+            "com/foo/ClassLiteralReference.gwt.xml",
+            "<module>",
+            "  <source path=''/>",
+            "  <entry-point class='com.foo.C'/>",
+            "</module>");
+
+    checkRecompiledModifiedApp("com.foo.ClassLiteralReference", Lists.newArrayList(
+            moduleResource, interfaceA, classC),
+        classBSansLiteralReference, classBWithLiteralReference,
+        stringSet("com.foo.B", "com.foo.C"), output);
+  }
+
+  public void checkIncrementalRecompile_primitiveClassLiteralReference(JsOutputOption output)
+      throws UnableToCompleteException, IOException, InterruptedException {
+    MockJavaResource classA =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.A",
+            "package com.foo;",
+            "public class A {",
+            "  public A() { ",
+            "    Class c = void.class; ",
+            "    c = int.class; ",
+            "    c = boolean.class;",
+            "    c = short.class;",
+            "    c = byte.class;",
+            "    c = long.class;",
+            "    c = float.class;",
+            "    c = double.class;",
+            "  }",
+            "}");
+
+    MockJavaResource classB =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.B",
+            "package com.foo;",
+            "public class B {",
+            "  public B() {  }",
+            "  public void m () { new A(); }",
+            "}");
+
+    MockJavaResource classC =
+        JavaResourceBase.createMockJavaResource(
+            "com.foo.C",
+            "package com.foo;",
+            "import com.google.gwt.core.client.EntryPoint;",
+            "public class C implements EntryPoint {",
+            "  public void onModuleLoad() {",
+            "      new B().m();",
+            "  }",
+            "}");
+
+    MockResource moduleResource =
+        JavaResourceBase.createMockResource(
+            "com/foo/PrimitiveClassLiteralReference.gwt.xml",
+            "<module>",
+            "  <source path=''/>",
+            "  <entry-point class='com.foo.C'/>",
+            "</module>");
+
+    checkRecompiledModifiedApp("com.foo.PrimitiveClassLiteralReference", Lists.newArrayList(
+            moduleResource, classA, classB),
+        classC, classC,
+        stringSet(getEntryMethodHolderTypeName("com.foo.PrimitiveClassLiteralReference"),
+            "com.foo.C"), output);
+  }
+
   private void checkIncrementalRecompile_dateStampChange(JsOutputOption output)
       throws UnableToCompleteException, IOException, InterruptedException {
     MinimalRebuildCache relinkMinimalRebuildCache = new MinimalRebuildCache();
@@ -1477,7 +1657,8 @@ public class CompilerTest extends ArgProcessorTestBase {
     checkRecompiledModifiedApp("com.foo.SuperFromStaleInnerModule",
         Lists.newArrayList(superFromStaleInnerModuleResource,
             superFromStaleInnerEntryPointResource), interfaceOneResource, interfaceOneResource,
-        stringSet("com.foo.SuperFromStaleInnerEntryPoint$B$1"), output);
+        stringSet(interfaceOneResource.getTypeName(), "com.foo.SuperFromStaleInnerEntryPoint$B$1"),
+        output);
   }
 
   private void checkIncrementalRecompile_deterministicUiBinder(JsOutputOption output)
@@ -1486,7 +1667,7 @@ public class CompilerTest extends ArgProcessorTestBase {
 
     checkRecompiledModifiedApp(compilerOptions, "com.foo.UiBinderTestModule", Lists.newArrayList(
         uiBinderTestModuleResource, uiBinderTestEntryPointResource, myWidgetUiXml), myWidget,
-        myWidget, stringSet("com.foo.MyWidget", "com.foo.TestEntryPoint",
+        myWidget, stringSet("com.foo.MyWidget", "com.foo.MyWidget$Binder", "com.foo.TestEntryPoint",
             "com.foo.MyWidget_BinderImpl", "com.foo.MyWidget_BinderImpl$Widgets"), output);
   }
 
@@ -1497,11 +1678,13 @@ public class CompilerTest extends ArgProcessorTestBase {
     String binderImpl = "com.foo.MyWidget_BinderImpl";
     checkRecompiledModifiedApp("com.foo.UiBinderTestModule",
         Lists.newArrayList(uiBinderTestModuleResource, uiBinderTestEntryPointResource, myWidget),
-        myWidgetWithWhiteStyleUiXml, myWidgetWithGreyStyleUiXml, stringSet("com.foo.MyWidget",
+        myWidgetWithWhiteStyleUiXml, myWidgetWithGreyStyleUiXml,
+        stringSet("com.foo.MyWidget",
             binderImpl, binderImpl + "_GenBundle_default_InlineClientBundleGenerator",
             binderImpl + "_GenBundle_default_InlineClientBundleGenerator$1",
             binderImpl + "_GenBundle_default_InlineClientBundleGenerator$styleInitializer",
-            binderImpl + "_TemplateImpl", binderImpl + "$Widgets"), output);
+            binderImpl + "_TemplateImpl",
+            binderImpl + "$Widgets", binderImpl + "$Template"), output);
   }
 
   private void checkIncrementalRecompile_packagePrivateOverride(JsOutputOption output)
@@ -1790,9 +1973,6 @@ public class CompilerTest extends ArgProcessorTestBase {
     compilerOptions.setModuleNames(ImmutableList.of(moduleName));
     compilerOptions.setOutput(output);
 
-    CompilerContext compilerContext = new CompilerContext.Builder().options(compilerOptions)
-        .minimalRebuildCache(minimalRebuildCache).build();
-
     // Write the Java/XML/etc resources that make up the test application.
     for (MockResource applicationResource : applicationResources) {
       writeResourceTo(applicationResource, applicationDir);
@@ -1801,7 +1981,7 @@ public class CompilerTest extends ArgProcessorTestBase {
     // Cause the module to be cached with a reference to the prefixed resource loader so that the
     // compile process will see those resources.
     ModuleDefLoader.clearModuleCache();
-    ModuleDefLoader.loadFromResources(logger, compilerContext, moduleName, resourceLoader, true);
+    ModuleDefLoader.loadFromResources(logger, moduleName, resourceLoader, true);
 
     // Run the compile.
     Compiler compiler = new Compiler(compilerOptions, minimalRebuildCache);

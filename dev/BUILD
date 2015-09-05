@@ -185,6 +185,7 @@ java_library(
             "core/src/com/google/gwt/dev/PrecompilationResult.java",
             "core/src/com/google/gwt/dev/StringAnalyzableTypeEnvironment.java",
             "core/src/com/google/gwt/dev/cfg/**/*.java",
+            "core/src/com/google/gwt/dev/common/**/*.java",
             "core/src/com/google/gwt/dev/javac/**/*.java",
             "core/src/com/google/gwt/dev/jdt/**/*.java",
             "core/src/com/google/gwt/dev/jjs/**/*.java",
@@ -332,4 +333,12 @@ GwtTestSuites(
     sharding = {"dev.CompilerTest": 12},
     srcjars = [":dev-test-code"],
     tests = GWT_DEV_TESTS,
+)
+
+filegroup(
+    name = "emul",
+    srcs = glob([
+        "core/super/javaemul/**/*.java",
+    ]),
+    visibility = ["//third_party/java_src/j2cl:__subpackages__"],
 )

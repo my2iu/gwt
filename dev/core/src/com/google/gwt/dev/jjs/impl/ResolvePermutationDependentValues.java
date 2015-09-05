@@ -87,8 +87,13 @@ public class ResolvePermutationDependentValues {
         return new JMethodCall(x.getSourceInfo(), null, method);
       }
 
-      return program.getLiteral(x.getSourceInfo(),
-          computePropertyValue(x.getRequestedValue(), x.getDefaultValue()));
+      propertyValue = commonPropertyAndBindingInfo.getPropertyValue(x.getRequestedValue());
+
+      if (propertyValue != null) {
+        return program.getLiteral(x.getSourceInfo(), propertyValue);
+      }
+
+      return x.getDefaultValueExpression();
     }
 
     private JExpression rebindClassExpression(JPermutationDependentValue x) {
@@ -149,11 +154,6 @@ public class ResolvePermutationDependentValues {
       throw new InternalCompilerException("No matching rebind result in all rebind results!");
     }
     return x.getResultExpressions().get(index);
-  }
-
-  public String computePropertyValue(String propertyName, String defaultValue) {
-    String propertyValue = commonPropertyAndBindingInfo.getPropertyValue(propertyName);
-    return propertyValue == null ? defaultValue : propertyValue;
   }
 
   private boolean execImpl() {
@@ -250,8 +250,7 @@ public class ResolvePermutationDependentValues {
       }
 
       // return new FooImpl();
-      JReturnStatement ret = new JReturnStatement(info, expression);
-      switchBody.addStmt(ret);
+      switchBody.addStmt(expression.makeReturnStatement());
     }
 
     assert switchBody.getStatements().size() > 0 : "No case statement emitted "
@@ -263,7 +262,7 @@ public class ResolvePermutationDependentValues {
 
     // return new FallbackImpl(); at the very end.
     assert mostUsedExpression != null : "No most-used expression";
-    JReturnStatement fallbackReturn = new JReturnStatement(info, mostUsedExpression);
+    JReturnStatement fallbackReturn = mostUsedExpression.makeReturnStatement();
 
     JMethodBody body = (JMethodBody) toReturn.getBody();
     body.getBlock().addStmt(sw);

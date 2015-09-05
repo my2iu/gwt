@@ -1,12 +1,12 @@
 /*
  * Copyright 2008 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -17,6 +17,7 @@ package com.google.gwt.emultest.java.util;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -32,6 +33,10 @@ import java.util.Set;
  * Test various collections.
  */
 public class CollectionsTest extends EmulTestBase {
+
+  private interface ListImplProvider {
+    List<Integer> copyOf(Collection<Integer> data);
+  }
 
   public static List<Integer> createRandomList() {
     ArrayList<Integer> l = new ArrayList<Integer>();
@@ -118,7 +123,7 @@ public class CollectionsTest extends EmulTestBase {
 
   /**
    * Test Collections.binarySearch(List, Object).
-   * 
+   *
    * Verify the following cases: empty List odd numbers of elements even numbers
    * of elements not found value larger than all elements not found value
    * smaller than all elements
@@ -145,7 +150,7 @@ public class CollectionsTest extends EmulTestBase {
 
   /**
    * Test Collections.binarySearch(List, Object, Comparator).
-   * 
+   *
    * Verify the following cases: empty List odd numbers of elements even numbers
    * of elements not found value larger than all elements not found value
    * smaller than all elements null Comparator uses natural ordering
@@ -276,6 +281,30 @@ public class CollectionsTest extends EmulTestBase {
     assertEquals(b, createRandomList());
   }
 
+  /**
+   * @tests java.util.Collections#rotate(java.util.List, int)
+   */
+  public void testRotate() {
+    try {
+      Collections.rotate(null, 0);
+      fail("Collections.rotate(null, distance) should throw NullPointerException");
+    } catch (NullPointerException expected) {
+      // Expected
+    }
+    // Test optimized RandomAccess code path
+    testRotateImpl(new ListImplProvider() {
+      public List<Integer> copyOf(Collection<Integer> data) {
+        return new ArrayList<>(data);
+      }
+    });
+    // Test sequential List code path
+    testRotateImpl(new ListImplProvider() {
+      public List<Integer> copyOf(Collection<Integer> data) {
+        return new LinkedList<>(data);
+      }
+    });
+  }
+
   public void testSort() {
     List<String> a = createSortedList();
     Collections.reverse(a);
@@ -306,4 +335,35 @@ public class CollectionsTest extends EmulTestBase {
       assertEquals(val, testArray[i]);
     }
   }
+
+  private void testRotateImpl(ListImplProvider listImpl) {
+    // rotating empty list should not throw exception
+    List<Integer> list = listImpl.copyOf(Collections.<Integer> emptyList());
+    Collections.rotate(list, 2);
+
+    List<Integer> original = Arrays.asList(0, 1, 2, 3, 4);
+    list = listImpl.copyOf(original);
+
+    Collections.rotate(list, 0);
+    assertEquals(original, list);
+
+    Collections.rotate(list, 3);
+    assertEquals(Arrays.asList(2, 3, 4, 0, 1), list);
+
+    Collections.rotate(list, list.size());
+    assertEquals(Arrays.asList(2, 3, 4, 0, 1), list);
+
+    Collections.rotate(list, list.size() + 3);
+    assertEquals(Arrays.asList(4, 0, 1, 2, 3), list);
+
+    Collections.rotate(list, -(list.size() + 3));
+    assertEquals(Arrays.asList(2, 3, 4, 0, 1), list);
+
+    Collections.rotate(list, -list.size());
+    assertEquals(Arrays.asList(2, 3, 4, 0, 1), list);
+
+    Collections.rotate(list, -3);
+    assertEquals(original, list);
+  }
+
 }

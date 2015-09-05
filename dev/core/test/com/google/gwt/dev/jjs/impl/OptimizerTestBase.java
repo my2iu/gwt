@@ -192,8 +192,11 @@ public abstract class OptimizerTestBase extends JJSTestBase {
       optimize(errorLogger, "void", code);
       fail("Compile should have failed but succeeded.");
     } catch (Exception e) {
-      assertTrue(e.getCause() instanceof UnableToCompleteException
-          || e instanceof UnableToCompleteException);
+      if (!(e.getCause() instanceof UnableToCompleteException)
+          && !(e instanceof UnableToCompleteException)) {
+        e.printStackTrace();
+        fail();
+      }
     }
     errorLogger.assertCorrectLogEntries();
   }
@@ -448,12 +451,8 @@ public abstract class OptimizerTestBase extends JJSTestBase {
     }
 
     // Take care of the return type
-    JStatement multiStm;
-    if (!returnType.equals("void")) {
-      multiStm = new JReturnStatement(multi.getSourceInfo(), multi);
-    } else {
-      multiStm = multi.makeStatement();
-    }
+    JStatement multiStm =
+        returnType.equals("void") ? multi.makeStatement() : multi.makeReturnStatement();
 
     // Replace the method body
     JMethodBody newBody = new JMethodBody(method.getBody().getSourceInfo());
@@ -476,14 +475,17 @@ public abstract class OptimizerTestBase extends JJSTestBase {
   protected final Result optimizeMethod(final String methodName,
       final String mainMethodReturnType, final String... mainMethodSnippet)
       throws UnableToCompleteException {
-    return optimizeMethod(TreeLogger.NULL, methodName, mainMethodReturnType, mainMethodSnippet);
+    return optimizeMethod(null, methodName, mainMethodReturnType, mainMethodSnippet);
   }
 
   protected final Result optimizeMethod(TreeLogger logger, final String methodName,
       final String mainMethodReturnType, final String... mainMethodSnippet)
       throws UnableToCompleteException {
+    if (logger == null) {
+      logger = this.logger;
+    }
     String snippet = Joiner.on("\n").join(mainMethodSnippet);
-    JProgram program = compileSnippet(mainMethodReturnType, snippet, true);
+    JProgram program = compileSnippet(logger, mainMethodReturnType, snippet, true);
     JMethod method = findMethod(program, methodName);
     boolean madeChanges = doOptimizeMethod(logger, program, method);
     if (madeChanges && runDeadCodeElimination) {

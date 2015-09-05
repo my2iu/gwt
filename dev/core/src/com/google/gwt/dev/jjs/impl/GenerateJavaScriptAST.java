@@ -21,9 +21,9 @@ import com.google.gwt.dev.CompilerContext;
 import com.google.gwt.dev.MinimalRebuildCache;
 import com.google.gwt.dev.PrecompileTaskOptions;
 import com.google.gwt.dev.cfg.PermutationProperties;
+import com.google.gwt.dev.common.InliningMode;
 import com.google.gwt.dev.jjs.HasSourceInfo;
 import com.google.gwt.dev.jjs.InternalCompilerException;
-import com.google.gwt.dev.jjs.JsOutputOption;
 import com.google.gwt.dev.jjs.SourceInfo;
 import com.google.gwt.dev.jjs.SourceOrigin;
 import com.google.gwt.dev.jjs.ast.Context;
@@ -65,6 +65,7 @@ import com.google.gwt.dev.jjs.ast.JLocal;
 import com.google.gwt.dev.jjs.ast.JLocalRef;
 import com.google.gwt.dev.jjs.ast.JMember;
 import com.google.gwt.dev.jjs.ast.JMethod;
+import com.google.gwt.dev.jjs.ast.JMethod.JsPropertyAccessorType;
 import com.google.gwt.dev.jjs.ast.JMethodBody;
 import com.google.gwt.dev.jjs.ast.JMethodCall;
 import com.google.gwt.dev.jjs.ast.JNameOf;
@@ -80,6 +81,7 @@ import com.google.gwt.dev.jjs.ast.JPostfixOperation;
 import com.google.gwt.dev.jjs.ast.JPrefixOperation;
 import com.google.gwt.dev.jjs.ast.JPrimitiveType;
 import com.google.gwt.dev.jjs.ast.JProgram;
+import com.google.gwt.dev.jjs.ast.JProgram.DispatchType;
 import com.google.gwt.dev.jjs.ast.JReferenceType;
 import com.google.gwt.dev.jjs.ast.JReturnStatement;
 import com.google.gwt.dev.jjs.ast.JStatement;
@@ -169,8 +171,10 @@ import com.google.gwt.dev.util.log.speedtracer.CompilerEventType;
 import com.google.gwt.dev.util.log.speedtracer.SpeedTracerLogger;
 import com.google.gwt.dev.util.log.speedtracer.SpeedTracerLogger.Event;
 import com.google.gwt.thirdparty.guava.common.base.Function;
+import com.google.gwt.thirdparty.guava.common.base.Joiner;
 import com.google.gwt.thirdparty.guava.common.base.Predicate;
 import com.google.gwt.thirdparty.guava.common.base.Predicates;
+import com.google.gwt.thirdparty.guava.common.collect.FluentIterable;
 import com.google.gwt.thirdparty.guava.common.collect.ImmutableList;
 import com.google.gwt.thirdparty.guava.common.collect.ImmutableSortedSet;
 import com.google.gwt.thirdparty.guava.common.collect.Iterables;
@@ -434,10 +438,7 @@ public class GenerateJavaScriptAST {
         recordSymbol(x, jsName);
       } else {
         JsName jsName;
-        if (specialObfuscatedFields.containsKey(x)) {
-          jsName = scopeStack.peek().declareName(mangleNameSpecialObfuscate(x));
-          jsName.setObfuscatable(false);
-        } else if (x.isJsTypeMember()) {
+        if (x.isJsProperty()) {
           jsName = scopeStack.peek().declareName(name, name);
           jsName.setObfuscatable(false);
         } else {
@@ -486,9 +487,9 @@ public class GenerateJavaScriptAST {
        * referenced as instance on null-types (as determined by type flow)
        */
       JMethod nullMethod = x.getNullMethod();
-      polymorphicNames.put(nullMethod, objectScope.declareName(nullMethod.getName()));
+      polymorphicNames.put(nullMethod, objectScope.declareName("$_nullMethod"));
       JField nullField = x.getNullField();
-      JsName nullFieldName = objectScope.declareName(nullField.getName());
+      JsName nullFieldName = objectScope.declareName("$_nullField");
       names.put(nullField, nullFieldName);
 
       /*
@@ -512,7 +513,7 @@ public class GenerateJavaScriptAST {
       }
 
       // My seed function name
-      JsName jsName = topScope.declareName(JjsUtils.getNameString(x), x.getShortName());
+      JsName jsName = topScope.declareName(JjsUtils.mangledNameString(x), x.getShortName());
       names.put(x, jsName);
       recordSymbol(x, jsName);
 
@@ -561,16 +562,8 @@ public class GenerateJavaScriptAST {
             polyName = interfaceScope.declareName(mangleNameForPrivatePoly(x), name);
           } else if (x.isPackagePrivate()) {
             polyName = interfaceScope.declareName(mangleNameForPackagePrivatePoly(x), name);
-            // Also add the mapping from the top of the package private overriding chain, so
-            // so that it can be referred when generating the vtable of a subclass that
-            // increases the visibility of this method.
-            polymorphicNames.put(typeOracle.getTopMostDefinition(x), polyName);
-          } else if (specialObfuscatedMethodSigs.containsKey(x.getSignature())) {
-            polyName = interfaceScope.declareName(mangleNameSpecialObfuscate(x));
-            polyName.setObfuscatable(false);
-            // if a JsType and we can set set the interface method to non-obfuscatable
-          } else if (x.isOrOverridesJsTypeMethod() && !typeOracle.needsJsInteropBridgeMethod(x)) {
-            if (x.isOrOverridesJsProperty()) {
+          } else if (x.isOrOverridesJsMethod() && !typeOracle.needsJsInteropBridgeMethod(x)) {
+            if (x.isOrOverridesJsPropertyAccessor()) {
               // Prevent JsProperty functions like x() from colliding with intended JS native
               // properties like .x;
               polyName = interfaceScope.declareName(mangleNameForJsProperty(x), name);
@@ -746,11 +739,6 @@ public class GenerateJavaScriptAST {
     private final JsName globalTemp = topScope.declareName("_");
 
     private final JsName prototype = objectScope.declareName("prototype");
-
-    // JavaScript functions that arise from methods that were not inlined in the Java AST
-    // NOTE: We use a LinkedHashSet to preserve the order of insertion. So that the following passes
-    // that use this result are deterministic.
-    private final Set<JsNode> functionsForJsInlining = Sets.newLinkedHashSet();
 
     {
       globalTemp.setObfuscatable(false);
@@ -1243,14 +1231,7 @@ public class GenerateJavaScriptAST {
 
       javaMethodForJSFunction.put(jsFunc, x);
 
-      if (!program.isInliningAllowed(x)) {
-        jsProgram.disallowInlining(jsFunc);
-      }
-
-      // Collect the resulting function to be considered by the JsInliner.
-      if (methodsForJsInlining.contains(x)) {
-        functionsForJsInlining.add(jsFunc);
-      }
+      jsFunc.setInliningMode(x.getInliningMode());
 
       List<JsParameter> params = popList(x.getParams().size()); // params
 
@@ -1323,8 +1304,7 @@ public class GenerateJavaScriptAST {
     @Override
     public void endVisit(JMethodCall x, Context ctx) {
       JMethod method = x.getTarget();
-      JsInvocation jsInvocation = new JsInvocation(x.getSourceInfo());
-      popList(jsInvocation.getArguments(), x.getArgs().size()); // args
+      List<JsExpression> args = popList(x.getArgs().size());
 
       if (JProgram.isClinit(method)) {
         /*
@@ -1351,20 +1331,43 @@ public class GenerateJavaScriptAST {
         }
       }
 
-      JsNameRef qualifier = null;
-      JsExpression unnecessaryQualifier = null;
-      JsExpression result = null;
-      boolean isJsProperty = false;
-      boolean isSam = false;
-      result = jsInvocation;
-
+      JsExpression result;
       if (method.isStatic()) {
-        if (x.getInstance() != null) {
-          unnecessaryQualifier = pop(); // instance
-        }
-        qualifier = names.get(method).makeRef(x.getSourceInfo());
-      } else if (x.isStaticDispatchOnly() && method.isConstructor()) {
-         /*
+        result = dispatchToStatic(x, method, args);
+      } else if (x.isStaticDispatchOnly()) {
+        result = dispatchToSuper(x, method, args);
+      } else if (method.isOrOverridesJsPropertyAccessor()) {
+        result = dispatchToPropertyAccessor(x, method, args);
+      } else if (method.isOrOverridesJsFunctionMethod()) {
+        result = dispatchToFunction(x, args);
+      } else if (typeOracle.needsJsInteropBridgeMethod(method)) {
+        result = dispatchViaTrampolineToBridgeMethod(x, method, args);
+      } else {
+        // Dispatch polymorphically (normal case).
+        JsNameRef methodName = polymorphicNames.get(method).makeRef(x.getSourceInfo());
+        methodName.setQualifier((JsExpression) pop()); // instance
+        result = new JsInvocation(x.getSourceInfo(), methodName, args);
+      }
+
+      push(result);
+    }
+
+    private JsExpression dispatchToStatic(JMethodCall x, JMethod method, List<JsExpression> args) {
+      JsNameRef methodName = names.get(method).makeRef(x.getSourceInfo());
+      JsExpression result = new JsInvocation(x.getSourceInfo(), methodName, args);
+      if (x.getInstance() != null) {
+        JsExpression unnecessaryQualifier = pop();
+        result = createCommaExpression(unnecessaryQualifier, result);
+      }
+      return result;
+    }
+
+    private JsExpression dispatchToSuper(JMethodCall x, JMethod method, List<JsExpression> args) {
+      JsName callName = objectScope.declareName("call");
+      callName.setObfuscatable(false);
+      JsNameRef qualifiedMethodName = callName.makeRef(x.getSourceInfo());
+      if (method.isConstructor()) {
+        /*
          * Constructor calls through {@code this} and {@code super} are always dispatched statically
          * using the constructor function name (constructors are always defined as top level
          * functions).
@@ -1372,18 +1375,13 @@ public class GenerateJavaScriptAST {
          * Because constructors are modeled like instance methods they have an implicit {@code this}
          * parameter, hence they are invoked like: "constructor.call(this, ...)".
          */
-        JsName callName = objectScope.declareName("call");
-        callName.setObfuscatable(false);
-        qualifier = callName.makeRef(x.getSourceInfo());
-        JsNameRef methodRef = names.get(method).makeRef(x.getSourceInfo());
-        qualifier.setQualifier(methodRef);
-        jsInvocation.getArguments().add(0, (JsExpression) pop()); // instance
-        if (program.isJsTypePrototype(method.getEnclosingType())) {
-          result = dispatchToSuperPrototype(x, method, qualifier, methodRef, jsInvocation);
-        }
-      } else if (x.isStaticDispatchOnly() && !method.isConstructor()) {
-        // Regular super call. This calls are always static and optimizations normally statify them.
-        // They can appear in completely unoptimized code, hence need to be handled here.
+        qualifiedMethodName.setQualifier(names.get(method).makeRef(x.getSourceInfo()));
+      } else {
+        // These are regular super method call. These calls are always dispatched statically and
+        // optimizations will statify them (except in a few cases, like being target of
+        // {@link Impl.getNameOf}.
+        // For the most part these calls only appear in completely unoptimized code, hence need to
+        // be handled here.
 
         // Construct JCHSU.getPrototypeFor(type).polyname
         // TODO(rluble): Ideally we would want to construct the inheritance chain the JS way and
@@ -1397,65 +1395,43 @@ public class GenerateJavaScriptAST {
 
         JsNameRef methodNameRef = polymorphicNames.get(method).makeRef(x.getSourceInfo());
         methodNameRef.setQualifier(getPrototypeCall);
+        qualifiedMethodName.setQualifier(methodNameRef);
+      }
 
-        // Construct JCHSU.getPrototypeFor(type).polyname.call(this,...)
-        JsName callName = objectScope.declareName("call");
-        callName.setObfuscatable(false);
-        qualifier = callName.makeRef(x.getSourceInfo());
-        qualifier.setQualifier(methodNameRef);
-        jsInvocation.getArguments().add(0, (JsExpression) pop()); // instance
-        // Is this method targeting a Foo_Prototype class?
-        if (program.isJsTypePrototype(method.getEnclosingType())) {
-          result = dispatchToSuperPrototype(x, method, qualifier, methodNameRef, jsInvocation);
-        }
-        // getClassPrototype is a native method call, so we enabling inlining
-        methodsForJsInlining.add(currentMethod);
+      // <method_qualifier>.call(instance, args);
+      JsInvocation jsInvocation = new JsInvocation(x.getSourceInfo(), qualifiedMethodName);
+      jsInvocation.getArguments().add((JsExpression) pop()); // instance
+      jsInvocation.getArguments().addAll(args);
+
+      // Is this method targeting a Foo_Prototype class?
+      if (program.isJsTypePrototype(method.getEnclosingType())) {
+        // TODO(goktug): inline following for further simplifications.
+        return dispatchToSuperPrototype(x, method, qualifiedMethodName, jsInvocation);
       } else {
-        JsName polyName = polymorphicNames.get(method);
-        // potentially replace method call with property access
-        isJsProperty = method.isOrOverridesJsProperty();
-        isSam = method.isOrOverridesJsFunctionMethod();
-
-        if (isJsProperty) {
-          JsExpression qualExpr = pop();
-          switch (method.getImmediateOrTransitiveJsPropertyType()) {
-            case GET:
-              result = createGetterDispatch(x, unnecessaryQualifier, method, qualExpr);
-              break;
-            case SET:
-              result = createSetterDispatch(x, jsInvocation, method, qualExpr);
-              break;
-            default:
-              throw new InternalCompilerException("JsProperty not a setter or getter.");
-          }
-        } else if (isSam) {
-          JsExpression qualExpr = pop();
-          result = createSAMcallDispatch(x, jsInvocation, qualExpr);
-        } else {
-          // insert trampoline (_ = instance, trampoline(_, _.jsBridgeMethRef,
-          // _.javaMethRef)).bind(_)(args)
-          if (typeOracle.needsJsInteropBridgeMethod(method)) {
-            maybeDispatchViaTrampolineToBridgeMethod(x, method, jsInvocation, unnecessaryQualifier,
-                result, polyName);
-
-            return;
-          } else {
-            // Dispatch polymorphically (normal case).
-            qualifier = polyName.makeRef(x.getSourceInfo());
-            qualifier.setQualifier((JsExpression) pop()); // instance
-          }
-        }
+        return jsInvocation;
       }
-      if (!isJsProperty && !isSam) {
-        jsInvocation.setQualifier(qualifier);
-      }
-      push(createCommaExpression(unnecessaryQualifier, result));
     }
 
-    private void maybeDispatchViaTrampolineToBridgeMethod(JMethodCall x,
-        JMethod method, JsInvocation jsInvocation,
-        JsExpression unnecessaryQualifier, JsExpression result,
-        JsName polyName) {
+    private JsExpression dispatchToPropertyAccessor(
+        JMethodCall x, JMethod method, List<JsExpression> args) {
+      JsNameRef propertyReference = new JsNameRef(x.getSourceInfo(), method.getJsName());
+      propertyReference.setQualifier((JsExpression) pop()); // instance
+      if (method.getJsPropertyAccessorType() == JsPropertyAccessorType.SETTER) {
+        return createAssignment(propertyReference, args.get(0));
+      }
+      return propertyReference;
+    }
+
+    private JsExpression dispatchToFunction(JMethodCall x, List<JsExpression> args) {
+      return new JsInvocation(x.getSourceInfo(), (JsExpression) pop(), args);
+    }
+
+    private JsExpression dispatchViaTrampolineToBridgeMethod(
+        JMethodCall x, JMethod method, List<JsExpression> args) {
+      // insert trampoline (_ = instance, trampoline(_, _.jsBridgeMethRef,
+      // _.javaMethRef)).bind(_)(args)
+
+      JsName polyName = polymorphicNames.get(method);
 
       JsName tempLocal = createTmpLocal();
 
@@ -1487,9 +1463,9 @@ public class GenerateJavaScriptAST {
       callBind.getArguments().add(tempLocal.makeRef(x.getSourceInfo()));
       // (tempLocal = instance, tramp(tempLocal, tempLocal.bridgeRef, tempLocal.javaRef)).bind(tempLocal)
       bind.setQualifier(callTramp);
-      jsInvocation.setQualifier(callBind);
-      result = createCommaExpression(tmp, jsInvocation);
-      push(createCommaExpression(unnecessaryQualifier, result));
+
+      JsInvocation jsInvocation = new JsInvocation(x.getSourceInfo(), callBind, args);
+      return createCommaExpression(tmp, jsInvocation);
     }
 
     private JsName createTmpLocal() {
@@ -1511,38 +1487,32 @@ public class GenerateJavaScriptAST {
       return tmpName;
     }
 
-    private JsExpression createSAMcallDispatch(JMethodCall x, JsInvocation jsInvocation,
-        JsExpression qualExpr) {
-      JsInvocation result = new JsInvocation(x.getSourceInfo());
-      result.setQualifier(qualExpr);
-      result.getArguments().addAll(jsInvocation.getArguments());
-      return result;
-    }
-
-    private JsExpression createSetterDispatch(JMethodCall x, JsInvocation jsInvocation,
-        JMethod targetMethod, JsExpression qualExpr) {
-      String propertyName = targetMethod.getImmediateOrTransitiveJsMemberName();
-      JsNameRef propertyReference = new JsNameRef(x.getSourceInfo(), propertyName);
-      propertyReference.setQualifier(qualExpr);
-      return createAssignment(propertyReference, jsInvocation.getArguments().get(0));
-    }
-
-    private JsExpression createGetterDispatch(JMethodCall x, JsExpression unnecessaryQualifier,
-        JMethod targetMethod, JsExpression qualExpr) {
-      String propertyName = targetMethod.getImmediateOrTransitiveJsMemberName();
-      JsNameRef propertyReference = new JsNameRef(x.getSourceInfo(), propertyName);
-      propertyReference.setQualifier(qualExpr);
-      return createCommaExpression(unnecessaryQualifier, propertyReference);
-    }
-
     /**
      * Setup qualifier and methodRef to dispatch to super-ctor or super-method.
      */
-    private JsExpression dispatchToSuperPrototype(JMethodCall x, JMethod method, JsNameRef qualifier,
-                                                  JsNameRef methodRef, JsInvocation jsInvocation) {
+    private JsExpression dispatchToSuperPrototype(JMethodCall x, JMethod method,
+        JsNameRef qualifier, JsInvocation jsInvocation) {
+
+      // in JsType case, super.foo() call requires SuperCtor.prototype.foo.call(this, args)
+      // the method target should be on a class that ends with $Prototype and implements a JsType
+      if (!(method instanceof JConstructor) && method.isOrOverridesJsMethod()) {
+        JsNameRef protoRef = prototype.makeRef(x.getSourceInfo());
+        JsNameRef methodName = new JsNameRef(x.getSourceInfo(), method.getName());
+        // add qualifier so we have jsPrototype.prototype.methodName.call(this, args)
+        String jsPrototype = getJsPrototype(method.getEnclosingType());
+        protoRef.setQualifier(createJsQualifier(jsPrototype, x.getSourceInfo()));
+        methodName.setQualifier(protoRef);
+        qualifier.setQualifier(methodName);
+        return jsInvocation;
+      }
+
+      return JsNullLiteral.INSTANCE;
+    }
+
+    private String getJsPrototype(JDeclaredType type) {
       String jsPrototype = null;
       // find JsType of Prototype method being invoked.
-      for (JInterfaceType intf : method.getEnclosingType().getImplements()) {
+      for (JInterfaceType intf : type.getImplements()) {
         JDeclaredType jsIntf = typeOracle.getNearestJsType(intf, true);
         assert jsIntf instanceof JInterfaceType;
 
@@ -1552,20 +1522,7 @@ public class GenerateJavaScriptAST {
         }
       }
       assert jsPrototype != null : "Unable to find JsType with prototype";
-
-      // in JsType case, super.foo() call requires SuperCtor.prototype.foo.call(this, args)
-      // the method target should be on a class that ends with $Prototype and implements a JsType
-      if (!(method instanceof JConstructor) && method.isOrOverridesJsTypeMethod()) {
-        JsNameRef protoRef = prototype.makeRef(x.getSourceInfo());
-        methodRef = new JsNameRef(methodRef.getSourceInfo(), method.getName());
-        // add qualifier so we have jsPrototype.prototype.methodName.call(this, args)
-        protoRef.setQualifier(createJsQualifier(jsPrototype, x.getSourceInfo()));
-        methodRef.setQualifier(protoRef);
-        qualifier.setQualifier(methodRef);
-        return jsInvocation;
-      }
-
-      return JsNullLiteral.INSTANCE;
+      return jsPrototype;
     }
 
     @Override
@@ -1604,18 +1561,27 @@ public class GenerateJavaScriptAST {
       JsNew newOp = new JsNew(x.getSourceInfo(), ctorName.makeRef(x.getSourceInfo()));
       popList(newOp.getArguments(), x.getArgs().size()); // args
       JsExpression newExpr = newOp;
-      JMethod sam = typeOracle.getJsFunctionMethod(x.getClassType());
-      if (sam != null) {
+      if (x.getClassType().isJsFunctionImplementation()) {
         JsFunction makeLambdaFunc =
             indexedFunctions.get("JavaClassHierarchySetupUtil.makeLambdaFunction");
-        JsNameRef samFuncNameRef = polymorphicNames.get(sam).makeRef(x.getSourceInfo());
+        JMethod jsFunctionMethod = getJsFunctionMethod(x.getClassType());
+        JsNameRef funcNameRef = polymorphicNames.get(jsFunctionMethod).makeRef(x.getSourceInfo());
         JsNameRef protoRef = prototype.makeRef(x.getSourceInfo());
-        samFuncNameRef.setQualifier(protoRef);
+        funcNameRef.setQualifier(protoRef);
         protoRef.setQualifier(ctorName.makeRef(x.getSourceInfo()));
         // makeLambdaFunction(Foo.prototype.samMethod, new Foo(...))
-        newExpr = new JsInvocation(x.getSourceInfo(), makeLambdaFunc, samFuncNameRef, newOp);
+        newExpr = new JsInvocation(x.getSourceInfo(), makeLambdaFunc, funcNameRef, newOp);
       }
       push(newExpr);
+    }
+
+    private JMethod getJsFunctionMethod(JClassType type) {
+      for (JMethod method : type.getMethods()) {
+        if (method.isOrOverridesJsFunctionMethod()) {
+          return method;
+        }
+      }
+      throw new AssertionError("Should never reach here.");
     }
 
     @Override
@@ -1871,6 +1837,7 @@ public class GenerateJavaScriptAST {
       Set<JDeclaredType> alreadyProcessed =
           Sets.<JDeclaredType>newLinkedHashSet(program.immortalCodeGenTypes);
       alreadyProcessed.add(program.getTypeClassLiteralHolder());
+      alreadyRan.addAll(alreadyProcessed);
 
       List<JDeclaredType> classLiteralSupportClasses =
           computeClassLiteralsSupportClasses(program, alreadyProcessed);
@@ -1976,9 +1943,8 @@ public class GenerateJavaScriptAST {
     }
 
     private void generateEpilogue(List<JsStatement> globalStmts) {
-      // Emit all the class literals for classes that where pruned.
-      generateClassLiterals(globalStmts, Iterables.filter(classLiteralDeclarationsByType.keySet(),
-          Predicates.not(Predicates.<JType>in(alreadyRan))));
+
+      generateRemainingClassLiterals(globalStmts);
 
       // add all @JsExport assignments
       generateExports(globalStmts);
@@ -1997,6 +1963,33 @@ public class GenerateJavaScriptAST {
         JsFunction func = (JsFunction) name.getStaticRef();
         func.setArtificiallyRescued(true);
       }
+    }
+
+    private void generateRemainingClassLiterals(List<JsStatement> globalStmts) {
+      if (!incremental) {
+        // Emit classliterals that are references but whose classes are not live.
+        generateClassLiterals(globalStmts, Iterables.filter(classLiteralDeclarationsByType.keySet(),
+            Predicates.not(Predicates.<JType>in(alreadyRan))));
+        return;
+      }
+
+      // In incremental, class literal references to class literals that were not generated
+      // as part of the current compile have to be from reference only classes.
+      assert FluentIterable.from(classLiteralDeclarationsByType.keySet())
+          .filter(Predicates.instanceOf(JDeclaredType.class))
+          .filter(Predicates.not(Predicates.<JType>in(alreadyRan)))
+          .filter(
+              new Predicate<JType>() {
+                @Override
+                public boolean apply(JType type) {
+                  return !program.isReferenceOnly((JDeclaredType) type);
+                }
+              })
+          .isEmpty();
+
+      // In incremental only the class literals for the primitive types should be part of the
+      // epilogue.
+      generateClassLiterals(globalStmts, JPrimitiveType.types);
     }
 
     private void generateClassLiterals(List<JsStatement> globalStmts,
@@ -2031,8 +2024,7 @@ public class GenerateJavaScriptAST {
         } else {
           JMember member = (JMember) exportedEntity;
           maybeHoistClinit(globalStmts, generatedClinits, member);
-          exportGenerator.exportMember(member, createBridgeMethodOrReturnAlias(member,
-              names.get(member)));
+          exportGenerator.exportMember(member, createAlias(member, names.get(member)));
         }
       }
     }
@@ -2356,8 +2348,12 @@ public class GenerateJavaScriptAST {
         // special: setup a "toString" alias for java.lang.Object.toString()
         generateToStringAlias(x, globalStmts);
 
-        // Set up the artificial castmap for string.
-        setupStringCastMap(program.getTypeJavaLangString(), globalStmts);
+        // Set up the artificial castmap for string, double, and boolean
+        for (Map.Entry<JClassType, DispatchType> nativeRepresentedType :
+            program.getRepresentedAsNativeTypesDispatchMap().entrySet()) {
+          setupCastMapForUnboxedType(nativeRepresentedType.getKey(), globalStmts,
+              nativeRepresentedType.getValue().getCastMapField());
+        }
 
         //  Perform necessary polyfills.
         globalStmts.add(constructInvocation(x.getSourceInfo(),
@@ -2553,7 +2549,7 @@ public class GenerateJavaScriptAST {
       // check if there's an overriding prototype
       JInterfaceType jsPrototypeIntf = JProgram.maybeGetJsTypeFromPrototype(superClass);
       String jsPrototype = jsPrototypeIntf != null ? jsPrototypeIntf.getJsPrototype() : null;
-      if (x.isOrExtendsJsFunction()) {
+      if (x.isJsFunctionImplementation()) {
         jsPrototype = "Function";
       }
 
@@ -2656,7 +2652,7 @@ public class GenerateJavaScriptAST {
     private JsName declareSynthesizedClosureConstructor(JDeclaredType x,
         List<JsStatement> globalStmts) {
       SourceInfo sourceInfo = x.getSourceInfo();
-      JsName classVar = topScope.declareName(JjsUtils.getNameString(x));
+      JsName classVar = topScope.declareName(JjsUtils.mangledNameString(x));
       JsFunction closureCtor = JsUtils.createEmptyFunctionLiteral(sourceInfo, topScope, classVar);
       JsExprStmt statement = closureCtor.makeStmt();
       globalStmts.add(statement);
@@ -2669,11 +2665,12 @@ public class GenerateJavaScriptAST {
     }
 
     /*
-     * Sets up the catmap for String.
+     * Sets up the castmap for type X
      */
-    private void setupStringCastMap(JClassType x, List<JsStatement> globalStmts) {
-      //  Cast.stringCastMap = /* String cast map */ { ..:1, ..:1}
-      JField castableTypeMapField = program.getIndexedField("Cast.stringCastMap");
+    private void setupCastMapForUnboxedType(JClassType x, List<JsStatement> globalStmts,
+        String castMapField) {
+      //  Cast.[castMapName] = /* cast map */ { ..:1, ..:1}
+      JField castableTypeMapField = program.getIndexedField(castMapField);
       JsName castableTypeMapName = names.get(castableTypeMapField);
       JsNameRef ctmRef = castableTypeMapName.makeRef(x.getSourceInfo());
 
@@ -2779,10 +2776,9 @@ public class GenerateJavaScriptAST {
             // _.exportedName = [obfuscatedMethodReference | function() { bridge code }]
             exportedName.setObfuscatable(false);
             generateVTableAssignment(globalStmts, method, exportedName,
-                createBridgeMethodOrReturnAlias(method, polyJsName));
+                createAlias(method, polyJsName));
           }
-          if (method.exposesOverriddenPackagePrivateMethod() &&
-              getPackagePrivateName(method) != null) {
+          if (method.exposesOverriddenPackagePrivateMethod()) {
             // This method exposes a package private method that is actually live, hence it needs
             // to make the package private name and the public name to be the same implementation at
             // runtime. This is done by an assignment of the form.
@@ -2852,13 +2848,13 @@ public class GenerateJavaScriptAST {
       }
 
       for (JMethod m : x.getMethods()) {
-        if (m.isExported()) {
+        if (m.isJsInteropEntryPoint()) {
           exportedMembersByExportName.put(m.getQualifiedExportName(), m);
         }
       }
 
       for (JField f : x.getFields()) {
-        if (f.isExported()) {
+        if (f.isJsInteropEntryPoint()) {
           if (!f.isFinal()) {
             logger.log(TreeLogger.Type.WARN, "Exporting effectively non-final field "
                 + f.getQualifiedName() + ". Due to the way exporting works, the value of the"
@@ -2877,52 +2873,20 @@ public class GenerateJavaScriptAST {
      * function is generated which invokes the method and coerces each argument or return type
      * as needed.
      */
-    JsExpression createBridgeMethodOrReturnAlias(JMember member, JsName aliasedMethodName) {
+    JsExpression createAlias(JMember member, JsName aliasedMethodName) {
       SourceInfo info = member.getSourceInfo();
       if (member instanceof JConstructor || member instanceof JField) {
         return aliasedMethodName.makeRef(info);
       } else {
         JMethod method = (JMethod) member;
-        boolean needsLongConversions = method.getType() == JPrimitiveType.LONG ||
-            Iterables.any(method.getParams(), new Predicate<JParameter>() {
-              @Override
-              public boolean apply(JParameter jParameter) {
-                return jParameter.getType() == JPrimitiveType.LONG;
-              }
-            });
 
         JsNameRef aliasedMethodRef = aliasedMethodName.makeRef(info);
 
-        if (!needsLongConversions) {
-          if (!method.isStatic()) {
-            // simply return Foo.prototype.aliasedMethod or _.aliasedMethod
-            aliasedMethodRef.setQualifier(getPrototypeQualifierOf(method));
-          }
-          return aliasedMethodRef;
-        }
-
-        // Construct function($arg1, $arg2, ...){ return this.meth($arg1, $arg2); }
-        JsFunction bridgeMethod = JsUtils.createEmptyFunctionLiteral(info, topScope, null);
-
-        // Bridge requires conversions.
-        // return coerceFromLong([this.]?aliasedMethodRef(coerceToLong(arg1), arg2, ...))
         if (!method.isStatic()) {
-          aliasedMethodRef.setQualifier(new JsThisRef(info));
+          // simply return Foo.prototype.aliasedMethod or _.aliasedMethod
+          aliasedMethodRef.setQualifier(getPrototypeQualifierOf(method));
         }
-        JsInvocation aliasedMethodInvocation = new JsInvocation(info, aliasedMethodRef);
-        for (JParameter param : method.getParams()) {
-          JsName argJsName = bridgeMethod.getScope().declareName("$arg_" + param.getName());
-          bridgeMethod.getParameters().add(new JsParameter(info, argJsName));
-          aliasedMethodInvocation.getArguments().add(param.getType() == JPrimitiveType.LONG ?
-              constructInvocation(info, "JavaClassHierarchySetupUtil.coerceToLong",
-                  argJsName.makeRef(info)) : argJsName.makeRef(info));
-        }
-
-        bridgeMethod.getBody().getStatements().add(new JsReturn(info,
-            method.getType() == JPrimitiveType.LONG ? constructInvocation(info,
-                "JavaClassHierarchySetupUtil.coerceFromLong", aliasedMethodInvocation) :
-                aliasedMethodInvocation));
-        return bridgeMethod;
+        return aliasedMethodRef;
       }
     }
 
@@ -2930,7 +2894,15 @@ public class GenerateJavaScriptAST {
      * Returns the package private JsName for {@code method}.
      */
     private JsName getPackagePrivateName(JMethod method) {
-      return polymorphicNames.get(typeOracle.getTopMostDefinition(method));
+      for (JMethod overridenMethod : method.getOverriddenMethods()) {
+        if (overridenMethod.isPackagePrivate()) {
+          JsName name = polymorphicNames.get(overridenMethod);
+          assert name != null;
+          return name;
+        }
+      }
+      throw new AssertionError(
+          method.toString() + " overrides a package private method but was not found.");
     }
 
     private void handleClinit(JsFunction clinitFunc, JsFunction superClinit) {
@@ -2952,7 +2924,7 @@ public class GenerateJavaScriptAST {
     private boolean isMethodPotentiallyCalledAcrossClasses(JMethod method) {
       assert incremental || crossClassTargets != null;
       return crossClassTargets == null || crossClassTargets.contains(method)
-          || method.isExported() || method.isOrOverridesJsTypeMethod();
+          || method.isJsInteropEntryPoint();
     }
 
     private Iterable<JMethod> getPotentiallyAliveConstructors(JClassType x) {
@@ -3129,15 +3101,22 @@ public class GenerateJavaScriptAST {
     }
   }
 
-  private class RecordJSInlinableMethods extends JVisitor {
+  private class CollectJsFunctionsForInlining extends JVisitor {
 
+    // JavaScript functions that arise from methods that were not inlined in the Java AST
+    // NOTE: We use a LinkedHashSet to preserve the order of insertion. So that the following passes
+    // that use this result are deterministic.
+    private Set<JsNode> functionsForJsInlining = Sets.newLinkedHashSet();
     private JMethod currentMethod;
 
     @Override
     public void endVisit(JMethod x, Context ctx) {
       if (x.isNative()) {
-        // These are methods that were not considered by the Java method inliner.
-        methodsForJsInlining.add(x);
+        // These are methods whose bodies where not traversed by the Java method inliner.
+        JsFunction function = methodBodyMap.get(x.getBody());
+        if (function != null && function.getBody() != null) {
+          functionsForJsInlining.add(function);
+        }
       }
 
       currentMethod = null;
@@ -3146,11 +3125,17 @@ public class GenerateJavaScriptAST {
     @Override
     public void endVisit(JMethodCall x, Context ctx) {
       JMethod target = x.getTarget();
-      if (program.isInliningAllowed(target) && (target.isNative()
-          || program.getIndexedTypes().contains(target.getEnclosingType()))) {
-        // the currentMethod calls a method that was not considered by the Java MethodInliner; these
-        // include JSNI methods and methods whose calls were inserted by normalization passes.
-        methodsForJsInlining.add(currentMethod);
+      if (target.isInliningAllowed() && (target.isNative()
+          || program.getIndexedTypes().contains(target.getEnclosingType())
+          || target.getInliningMode() == InliningMode.FORCE_INLINE)) {
+        // These are either: 1) callsites to JSNI functions, in which case MethodInliner did not
+        // attempt to inline; 2) inserted by normalizations passes AFTER all inlining or 3)
+        // calls to methods annotated with @ForceInline that were not inlined by the simple
+        // MethodInliner.
+        JsFunction function = methodBodyMap.get(currentMethod.getBody());
+        if (function != null && function.getBody() != null) {
+          functionsForJsInlining.add(function);
+        }
       }
     }
 
@@ -3158,6 +3143,11 @@ public class GenerateJavaScriptAST {
     public boolean visit(JMethod x, Context ctx) {
       currentMethod = x;
       return true;
+    }
+
+    public Set<JsNode> getFunctionsForJsInlining() {
+      accept(program);
+      return functionsForJsInlining;
     }
   }
 
@@ -3190,8 +3180,8 @@ public class GenerateJavaScriptAST {
     @Override
     public void endVisit(JMethod x, Context ctx) {
       // methods which are exported or static indexed methods may be called externally
-      if (x.isExported() || x.isStatic() && program.getIndexedMethods()
-          .contains(x)) {
+      if (x.isJsInteropEntryPoint()
+          || (x.isStatic() && program.getIndexedMethods().contains(x))) {
         if (x instanceof JConstructor) {
           // exported ctors always considered live
           liveCtors.add((JConstructor) x);
@@ -3319,12 +3309,6 @@ public class GenerateJavaScriptAST {
   private Map<String, JsName> indexedFields = Maps.newHashMap();
 
   /**
-   * Methods where inlining hasn't happened yet because they are native or contain calls to native
-   * methods. See {@link RecordJSInlinableMethods}.
-   */
-  private Set<JMethod> methodsForJsInlining = Sets.newHashSet();
-
-  /**
    * Contains JsNames for all interface methods. A special scope is needed so
    * that independent classes will obfuscate their interface implementation
    * methods the same way.
@@ -3361,8 +3345,6 @@ public class GenerateJavaScriptAST {
    */
   private Set<HasName> nameOfTargets = Sets.newHashSet();
 
-  private final JsOutputOption output;
-
   private final boolean optimize;
 
   private final TreeLogger logger;
@@ -3370,16 +3352,6 @@ public class GenerateJavaScriptAST {
   // This is also used to do some final optimizations.
   // TODO(rluble) move optimizations to a Java AST optimization pass.
   private final boolean incremental;
-
-  /**
-   * All of the fields in String and Array need special handling for interop.
-   */
-  private final Map<JField, String> specialObfuscatedFields = Maps.newHashMap();
-
-  /**
-   * All of the methods in String and Array need special handling for interop.
-   */
-  private final Map<String, String> specialObfuscatedMethodSigs = Maps.newHashMap();
 
   /**
    * If true, polymorphic functions are made anonymous vtable declarations and
@@ -3429,7 +3401,6 @@ public class GenerateJavaScriptAST {
     this.properties = properties;
 
     PrecompileTaskOptions options = compilerContext.getOptions();
-    this.output = options.getOutput();
     this.optimize = options.getOptimizationLevel() > OptionOptimize.OPTIMIZE_LEVEL_DRAFT;
     this.methodNameMappingMode = options.getMethodNameDisplayMode();
     assert methodNameMappingMode != null;
@@ -3437,45 +3408,6 @@ public class GenerateJavaScriptAST {
 
     this.stripStack = JsStackEmulator.getStackMode(properties) == JsStackEmulator.StackMode.STRIP;
     this.closureCompilerFormatEnabled = options.isClosureCompilerFormatEnabled();
-
-    /*
-     * Because we modify the JavaScript String prototype, all fields and
-     * polymorphic methods on String and super types need special handling.
-     */
-
-    // Object polymorphic
-    Map<String, String> namesToIdents = Maps.newHashMap();
-    namesToIdents.put("getClass", "gC");
-    namesToIdents.put("hashCode", "hC");
-    namesToIdents.put("equals", "eQ");
-    namesToIdents.put("toString", "tS");
-    namesToIdents.put("finalize", "fZ");
-
-    List<JMethod> methods = Lists.newArrayList(program.getTypeJavaLangObject().getMethods());
-    for (JMethod method : methods) {
-      if (method.canBePolymorphic()) {
-        String ident = namesToIdents.get(method.getName());
-        assert ident != null : method.getEnclosingType().getName() + "::" + method.getName() +
-            " is not in the list of known methods.";
-        specialObfuscatedMethodSigs.put(method.getSignature(), ident);
-      }
-    }
-
-    namesToIdents.clear();
-    // Object fields
-    namesToIdents.put("expando", "eX");
-    namesToIdents.put("typeMarker", "tM");
-    namesToIdents.put("castableTypeMap", "cM");
-    namesToIdents.put("___clazz", "cZ");
-
-    for (JField field : program.getTypeJavaLangObject().getFields()) {
-      if (!field.isStatic()) {
-        String ident = namesToIdents.get(field.getName());
-        assert ident != null : field.getEnclosingType().getName() + "::" + field.getName() +
-            " is not in the list of known fields.";
-        specialObfuscatedFields.put(field, ident);
-      }
-    }
   }
 
   /**
@@ -3493,13 +3425,11 @@ public class GenerateJavaScriptAST {
   }
 
   String mangleName(JField x) {
-    String s = JjsUtils.getNameString(x.getEnclosingType()) + '_' + JjsUtils.getNameString(x);
-    return s;
+    return JjsUtils.mangleMemberName(x.getEnclosingType().getName(), x.getName());
   }
 
   String mangleNameForGlobal(JMethod x) {
-    String s =
-        JjsUtils.getNameString(x.getEnclosingType()) + '_' + JjsUtils.getNameString(x) + "__";
+    String s = JjsUtils.mangleMemberName(x.getEnclosingType().getName(), x.getName()) + "__";
     for (int i = 0; i < x.getOriginalParamTypes().size(); ++i) {
       JType type = x.getOriginalParamTypes().get(i);
       s += type.getJavahSignatureName();
@@ -3510,78 +3440,46 @@ public class GenerateJavaScriptAST {
 
   String mangleNameForPackagePrivatePoly(JMethod x) {
     assert x.isPackagePrivate() && !x.isStatic();
-    StringBuilder sb = new StringBuilder();
     /*
-     * Package private instance methods in different classes should not override each
+     * Package private instance methods in different package should not override each
      * other, so they must have distinct polymorphic names. Therefore, add the
-     * class name of where the method is first defined to the mangled name.
+     * package to the mangled name.
      */
-    sb.append("package_private$");
-    JMethod topDefinition = typeOracle.getTopMostDefinition(x);
-    sb.append(JjsUtils.getNameString(topDefinition.getEnclosingType()));
-    sb.append("$");
-    sb.append(JjsUtils.getNameString(x));
-    JjsUtils.constructManglingSignature(x, sb);
-    return StringInterner.get().intern(sb.toString());
+    String mangledName = Joiner.on("$").join(
+        "package_private",
+        JjsUtils.mangledNameString(x.getEnclosingType().getPackageName()),
+        JjsUtils.mangledNameString(x));
+    return StringInterner.get().intern(JjsUtils.constructManglingSignature(x, mangledName));
   }
 
   String mangleNameForPoly(JMethod x) {
     assert !x.isPrivate() && !x.isStatic();
-    StringBuilder sb = new StringBuilder();
-    sb.append(JjsUtils.getNameString(x));
-    JjsUtils.constructManglingSignature(x, sb);
-    return StringInterner.get().intern(sb.toString());
+
+    return StringInterner.get().intern(
+        JjsUtils.constructManglingSignature(x, JjsUtils.mangledNameString(x)));
   }
 
   String mangleNameForPrivatePoly(JMethod x) {
     assert x.isPrivate() && !x.isStatic();
-    StringBuilder sb = new StringBuilder();
     /*
      * Private instance methods in different classes should not override each
      * other, so they must have distinct polymorphic names. Therefore, add the
      * class name to the mangled name.
      */
-    sb.append("private$");
-    sb.append(JjsUtils.getNameString(x.getEnclosingType()));
-    sb.append("$");
-    sb.append(JjsUtils.getNameString(x));
-    JjsUtils.constructManglingSignature(x, sb);
-    return StringInterner.get().intern(sb.toString());
+    String mangledName = Joiner.on("$").join(
+        "private",
+        JjsUtils.mangledNameString(x.getEnclosingType()),
+        JjsUtils.mangledNameString(x));
+
+    return StringInterner.get().intern(JjsUtils.constructManglingSignature(x, mangledName));
   }
 
   String mangleNameForJsProperty(JMethod x) {
-    assert x.isOrOverridesJsProperty();
-    StringBuilder sb = new StringBuilder();
-    sb.append("jsproperty$");
-    sb.append(JjsUtils.getNameString(x));
-    JjsUtils.constructManglingSignature(x, sb);
-    return StringInterner.get().intern(sb.toString());
-  }
+    String mangledName = Joiner.on("$").join(
+        "jsproperty$",
+        JjsUtils.mangledNameString(x));
 
-  String mangleNameSpecialObfuscate(JField x) {
-    assert (specialObfuscatedFields.containsKey(x));
-    switch (output) {
-      case OBFUSCATED:
-        return specialObfuscatedFields.get(x);
-      case PRETTY:
-        return x.getName() + "$";
-      case DETAILED:
-        return mangleName(x) + "$";
-    }
-    throw new InternalCompilerException("Unknown output mode");
-  }
-
-  String mangleNameSpecialObfuscate(JMethod x) {
-    assert (specialObfuscatedMethodSigs.containsKey(x.getSignature()));
-    switch (output) {
-      case OBFUSCATED:
-        return specialObfuscatedMethodSigs.get(x.getSignature());
-      case PRETTY:
-        return x.getName() + "$";
-      case DETAILED:
-        return mangleNameForPoly(x) + "$";
-    }
-    throw new InternalCompilerException("Unknown output mode");
+    return StringInterner.get().intern(JjsUtils.constructManglingSignature(x, mangledName));
   }
 
   private final Map<JType, JDeclarationStatement> classLiteralDeclarationsByType =
@@ -3617,7 +3515,6 @@ public class GenerateJavaScriptAST {
     if (!incremental) {
       // TODO(rluble): pull out this analysis and make it a Java AST optimization pass.
       new RecordCrossClassCallsAndConstructorLiveness().accept(program);
-      new RecordJSInlinableMethods().accept(program);
     }
 
     // Map class literals to their respective types.
@@ -3637,7 +3534,10 @@ public class GenerateJavaScriptAST {
     JavaToJavaScriptMap jjsMap = new JavaToJavaScriptMapImpl(program.getDeclaredTypes(),
         names, typeForStatMap, vtableInitForMethodMap);
 
-    return Pair.create(jjsMap, generator.functionsForJsInlining);
+    Set<JsNode> functionsForJsInlining = incremental ? Collections.<JsNode>emptySet() :
+        new CollectJsFunctionsForInlining().getFunctionsForJsInlining();
+
+    return Pair.create(jjsMap, functionsForJsInlining);
   }
 
   private JsFunction getJsFunctionFor(JMethod jMethod) {

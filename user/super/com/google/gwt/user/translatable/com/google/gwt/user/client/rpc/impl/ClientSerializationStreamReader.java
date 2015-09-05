@@ -19,7 +19,6 @@ import com.google.gwt.core.client.GwtScriptOnly;
 import com.google.gwt.core.client.JavaScriptObject;
 import com.google.gwt.core.client.JsonUtils;
 import com.google.gwt.core.client.UnsafeNativeLong;
-import com.google.gwt.user.client.Window;
 import com.google.gwt.user.client.rpc.IncompatibleRemoteServiceException;
 import com.google.gwt.user.client.rpc.SerializationException;
 
@@ -59,7 +58,7 @@ public final class ClientSerializationStreamReader extends
      * Need to read the version from the string since version is later set in
      * super.prepareToRead() from the evaluated payload but that is too late.
      */
-    if(readVersion(encoded) < SERIALIZATION_STREAM_JSON_VERSION){
+    if (readVersion(encoded) < SERIALIZATION_STREAM_JSON_VERSION) {
       // Versions prior to 8 uses almost JSON with Javascript is special cases; e.g., using ].concat([,
       // non-stringified NaN/Infinity or ''+'' concatenated strings.
       results = eval(encoded);
@@ -112,7 +111,7 @@ public final class ClientSerializationStreamReader extends
   @UnsafeNativeLong
   public native long readLong() /*-{
     var s = this.@com.google.gwt.user.client.rpc.impl.ClientSerializationStreamReader::results[--this.@com.google.gwt.user.client.rpc.impl.ClientSerializationStreamReader::index];
-    return @com.google.gwt.lang.LongLib::longFromBase64(Ljava/lang/String;)(s);
+    return @ClientSerializationStreamReader::longFromBase64(Ljava/lang/String;)(s);
   }-*/;
 
   public native short readShort() /*-{

@@ -17,6 +17,8 @@ package com.google.gwt.dev.jjs.impl;
 
 import com.google.gwt.dev.jjs.ast.Context;
 import com.google.gwt.dev.jjs.ast.JAbsentArrayDimension;
+import com.google.gwt.dev.jjs.ast.JArrayLength;
+import com.google.gwt.dev.jjs.ast.JArrayRef;
 import com.google.gwt.dev.jjs.ast.JArrayType;
 import com.google.gwt.dev.jjs.ast.JBinaryOperation;
 import com.google.gwt.dev.jjs.ast.JBinaryOperator;
@@ -92,6 +94,18 @@ public class ControlFlowAnalyzer {
     private final List<JMethod> curMethodStack = Lists.newArrayList();
 
     @Override
+    public boolean visit(JArrayRef arrayRef, Context ctx) {
+      maybeRescueJsTypeArray(arrayRef.getInstance().getType());
+      return true;
+    }
+
+    @Override
+    public boolean visit(JArrayLength arrayLength, Context ctx) {
+      maybeRescueJsTypeArray(arrayLength.getInstance().getType());
+      return true;
+    }
+
+    @Override
     public boolean visit(JArrayType type, Context ctx) {
       assert (referencedTypes.contains(type));
       boolean isInstantiated = instantiatedTypes.contains(type);
@@ -105,23 +119,23 @@ public class ControlFlowAnalyzer {
         JClassType superClass = ((JClassType) leafType).getSuperClass();
         if (superClass != null) {
           // FooSub[] -> Foo[]
-          rescue(program.getOrCreateArrayType(superClass, dims), true, isInstantiated);
+          rescue(program.getOrCreateArrayType(superClass, dims), isInstantiated);
           didSuperType = true;
         }
       } else if (leafType instanceof JInterfaceType) {
         // Intf[] -> Object[]
         rescue(program.getOrCreateArrayType(program.getTypeJavaLangObject(), dims),
-            true, isInstantiated);
+            isInstantiated);
         didSuperType = true;
       }
       if (!didSuperType) {
         if (dims > 1) {
           // anything[][] -> Object[]
-          rescue(program.getOrCreateArrayType(program.getTypeJavaLangObject(), dims - 1), true,
+          rescue(program.getOrCreateArrayType(program.getTypeJavaLangObject(), dims - 1),
               isInstantiated);
         } else {
           // anything[] -> Object
-          rescue(program.getTypeJavaLangObject(), true, isInstantiated);
+          rescue(program.getTypeJavaLangObject(), isInstantiated);
         }
       }
 
@@ -130,7 +144,7 @@ public class ControlFlowAnalyzer {
         JDeclaredType dLeafType = (JDeclaredType) leafType;
         for (JInterfaceType intfType : dLeafType.getImplements()) {
           JArrayType intfArray = program.getOrCreateArrayType(intfType, dims);
-          rescue(intfArray, true, isInstantiated);
+          rescue(intfArray, isInstantiated);
         }
       }
 
@@ -186,10 +200,10 @@ public class ControlFlowAnalyzer {
     public boolean visit(JCastOperation x, Context ctx) {
       // Rescue any JavaScriptObject type that is the target of a cast.
       JType targetType = x.getCastType();
-      if (!program.typeOracle.canBeInstantiatedInJavascript(targetType)) {
+      if (!canBeInstantiatedInJavaScript(targetType)) {
         return true;
       }
-      rescue((JReferenceType) targetType, true, true);
+      rescue((JReferenceType) targetType, true);
       JType exprType = x.getExpr().getType();
       if (program.typeOracle.isSingleJsoImpl(targetType)) {
         /*
@@ -203,14 +217,8 @@ public class ControlFlowAnalyzer {
           // source is JSO or SingleJso interface whose implementor is live
           JClassType jsoImplementor =
               program.typeOracle.getSingleJsoImpl((JReferenceType) targetType);
-          if (jsoImplementor != null) {
-            rescue(jsoImplementor, true, true);
-          }
+          rescue(jsoImplementor, true);
         }
-      } else if (program.typeOracle.isJsType(targetType)
-        && ((JDeclaredType) targetType).getJsPrototype() != null) {
-        // keep alive JsType with prototype used in cast so it can used in cast checks against JS objects later
-        rescue((JReferenceType) targetType, true, true);
       }
 
       return true;
@@ -230,20 +238,18 @@ public class ControlFlowAnalyzer {
       boolean isInstantiated = instantiatedTypes.contains(type);
 
       // Rescue my super type
-      rescue(type.getSuperClass(), true, isInstantiated);
+      rescue(type.getSuperClass(), isInstantiated);
 
       // Rescue my clinit (it won't ever be explicitly referenced)
       if (type.hasClinit()) {
         rescue(type.getClinitMethod());
       }
 
-      // JLS 12.4.1: don't rescue my super interfaces just because I'm rescued.
-      // However, if I'm instantiated, let's mark them as instantiated.
-      for (JInterfaceType intfType : type.getImplements()) {
-        rescue(intfType, false, isInstantiated);
+      // If I'm instantiated, let's mark super interfaces as instantiated.
+      if (isInstantiated) {
+        rescueMembersAndInstantiateSuperInterfaces(type);
       }
 
-      rescueMembersIfInstantiable(type);
       return false;
     }
 
@@ -289,7 +295,7 @@ public class ControlFlowAnalyzer {
        * the enclosing types for any static fields that make it here.
        */
       if (target.isStatic()) {
-        rescue(target.getEnclosingType(), true, false);
+        rescue(target.getEnclosingType(), false);
       }
       if (target.isStatic() || instantiatedTypes.contains(target.getEnclosingType())) {
         rescue(target);
@@ -313,15 +319,11 @@ public class ControlFlowAnalyzer {
         rescue(type.getClinitMethod());
       }
 
-      // JLS 12.4.1: don't rescue my super interfaces just because I'm rescued.
-      // However, if I'm instantiated, let's mark them as instantiated.
+      // If I'm instantiated, let's mark super interfaces as instantiated.
       if (isInstantiated) {
-        for (JInterfaceType intfType : type.getImplements()) {
-          rescue(intfType, false, true);
-        }
+        rescueMembersAndInstantiateSuperInterfaces(type);
       }
 
-      rescueMembersIfInstantiable(type);
       return false;
     }
 
@@ -338,10 +340,10 @@ public class ControlFlowAnalyzer {
       if (enclosingType.isJsoType()) {
         // Calls to JavaScriptObject types rescue those types.
         boolean instance = !x.isStatic() || program.isStaticImpl(x);
-        rescue(enclosingType, true, instance);
+        rescue(enclosingType, instance);
       } else if (x.isStatic()) {
         // JLS 12.4.1: references to static methods rescue the enclosing class
-        rescue(enclosingType, true, false);
+        rescue(enclosingType, false);
       }
 
       if (x.isNative()) {
@@ -405,7 +407,13 @@ public class ControlFlowAnalyzer {
         return true;
       }
 
-      return rescueArgumentsIfParametersCanBeRead(call, method);
+      if (call.getInstance() != null) {
+        // Explicitly visit instance since we're returning false below.
+        this.accept(call.getInstance());
+      }
+
+      rescueArgumentsIfParametersCanBeRead(call);
+      return false;
     }
 
     @Override
@@ -421,11 +429,11 @@ public class ControlFlowAnalyzer {
           if (newArray.dims.get(i) instanceof JAbsentArrayDimension) {
             break;
           }
-          rescue(program.getOrCreateArrayType(leafType, nDims - i), true, true);
+          rescue(program.getOrCreateArrayType(leafType, nDims - i), true);
         }
       } else {
         // just rescue my own specific type
-        rescue(arrayType, true, true);
+        rescue(arrayType, true);
       }
       return true;
     }
@@ -433,7 +441,7 @@ public class ControlFlowAnalyzer {
     @Override
     public boolean visit(JNewInstance x, Context ctx) {
       // rescue and instantiate the target class!
-      rescueAndInstantiate(x.getClassType());
+      rescue(x.getClassType(), true);
       return super.visit(x, ctx);
     }
 
@@ -488,7 +496,7 @@ public class ControlFlowAnalyzer {
       if (x.getTarget() instanceof JConstructor) {
         // But if a constructor is targeted, there is an implicit 'new' op.
         JConstructor ctor = (JConstructor) x.getTarget();
-        rescueAndInstantiate(ctor.getEnclosingType());
+        rescue(ctor.getEnclosingType(), true);
       }
       return visit((JMethodCall) x, ctx);
     }
@@ -498,13 +506,15 @@ public class ControlFlowAnalyzer {
       liveStrings.add(literal.getValue());
 
       // rescue and instantiate java.lang.String
-      rescue(program.getTypeJavaLangString(), true, true);
+      rescue(program.getTypeJavaLangString(), true);
       return true;
     }
 
     private boolean canBeInstantiatedInJavaScript(JType type) {
-      if (program.typeOracle.canBeInstantiatedInJavascript(type) ||
-          program.isJavaLangString(type)) {
+      // Technically, JsType/JsFunction are also instantiatable in JavaScript but we don't track
+      // them using similar to JSO as if we do that then after cast normalization, they got pruned.
+      if (program.typeOracle.canBeJavaScriptObject(type)
+          || program.isRepresentedAsNativeJsPrimitive(type)) {
         return true;
       }
 
@@ -581,13 +591,11 @@ public class ControlFlowAnalyzer {
       if (!canBeInstantiatedInJavaScript(type)) {
         return;
       }
-      rescue((JReferenceType) type, true, true);
+      rescue((JReferenceType) type, true);
       if (program.typeOracle.isSingleJsoImpl(type)) {
         // Cast of JSO into SingleJso interface, rescue the implementor if exists
         JClassType singleJsoImpl = program.typeOracle.getSingleJsoImpl((JReferenceType) type);
-        if (singleJsoImpl != null) {
-          rescue(singleJsoImpl, true, true);
-        }
+        rescue(singleJsoImpl, true);
       }
     }
 
@@ -596,8 +604,7 @@ public class ControlFlowAnalyzer {
         return;
       }
 
-      if (!liveFieldsAndMethods.contains(method)) {
-        liveFieldsAndMethods.add(method);
+      if (liveFieldsAndMethods.add(method)) {
         membersToRescueIfTypeIsInstantiated.remove(method);
         if (dependencyRecorder != null) {
           curMethodStack.add(method);
@@ -607,42 +614,22 @@ public class ControlFlowAnalyzer {
         if (dependencyRecorder != null) {
           curMethodStack.remove(curMethodStack.size() - 1);
         }
-        if (method.isNative() || method.isOrOverridesJsTypeMethod()
-            || method.isOrOverridesJsFunctionMethod()) {
-            /*
-             * SPECIAL: returning from this method passes a value from
-             * JavaScript into Java.
-             */
+        if (method.isNative()) {
+          // Returning from this method passes a value from JavaScript into Java.
           maybeRescueJavaScriptObjectPassingIntoJava(method.getType());
         }
-        if (method.isExported()
-            || method.isOrOverridesJsTypeMethod()
-            || method.isOrOverridesJsFunctionMethod()) {
+        if (method.canBeCalledExternally()) {
           for (JParameter param : method.getParams()) {
-            /**
-             * TODO (cromwellian): JS visible methods (virtual or static) may be supplied
-             * instantiated types that are implemented in JS. This code prevents parameters
-             * that are JS interface types from being considered un-instantiated. This logic
-             * needs to be tightened up here and elsewhere, we want to be conservative as
-             * possible to avoid code size bloat. Parameters in JsExport methods or
-             * JsType methods should not be pruned in order to keep the calling API
-             * consistent between optimized Java and JS.
-             */
+            // Parameters in JsExport, JsType, JsFunction methods should not be pruned in order to
+            // keep the API intact.
             rescue(param);
-            // Strings, Arrays, JSOs, and JsTypes can all be instantiatd in Javascript
-            if (canBeInstantiatedInJavaScript(param.getType())) {
-              // Param can be read from external JS if this method is implemented in JS
-              // this should really be done in rescueArgumentsIfParametersCanBeRead, but
-              // there is no JMethodCall to process since it might be from external JS
-              // arg supplied from external caller can be from JS, so treat type as instantiated
-              rescue((JReferenceType) param.getType(), true, true);
-            }
           }
         }
         rescueOverridingMethods(method);
         if (method == getClassMethod) {
           rescueClassLiteralsIfGetClassIsLive();
         }
+
         if (program.isJsTypePrototype(method.getEnclosingType())) {
           // for JsInterface Prototype methods, rescue all parameters
           // because these are stub methods and the parameters would get pruned ordinarily
@@ -656,7 +643,18 @@ public class ControlFlowAnalyzer {
       }
     }
 
-    private void rescue(JReferenceType type, boolean isReferenced, boolean isInstantiated) {
+    private void maybeRescueJsTypeArray(JType type) {
+      if (!(type instanceof JArrayType)) {
+        return;
+      }
+      JArrayType arrayType = (JArrayType) type;
+      if (arrayType.canBeImplementedExternally()) {
+        rescue(arrayType, true);
+        maybeRescueJsTypeArray(arrayType.getElementType());
+      }
+    }
+
+    private void rescue(JReferenceType type, boolean isInstantiated) {
       if (type == null) {
         return;
       }
@@ -673,7 +671,7 @@ public class ControlFlowAnalyzer {
         doVisit = true;
       }
 
-      if (isReferenced && referencedTypes.add(type)) {
+      if (referencedTypes.add(type)) {
         doVisit = true;
       }
 
@@ -682,42 +680,25 @@ public class ControlFlowAnalyzer {
       }
 
       accept(type);
-      if (type instanceof JDeclaredType) {
-          /*
-           * For @JsType, we rescue all JsType exposed fields and methods
-           * because we don't know if they'll be called from JS or not.
-           * That is, the Java implementor may be called because the interface
-           * was passed into JS, or it may be called via exported functions.
-           *
-           * For @JsFunction, we rescue its sam function because we don't know
-           * if they'll be called from JS or not. That is, when a instance of
-           * a @JsFunction is passed to JS, its sam function may be implicitly
-           * called by the instance.
-           *
-           * We may be able to tighten this to check for @JsExport as well,
-           * since if there is no @JsExport, the only way for JS code to get a
-           * reference to the interface is by it being constructed in Java
-           * and passed via JSNI into JS, and in that mechanism, the
-           * rescue would happen automatically.
-           */
-        JDeclaredType dtype = (JDeclaredType) type;
 
-        // On the surface this would appear to fail to correctly rescue any exported method that is
-        // on a subclass of a @JsType annotated type. But actually since such an exported method is
-        // an override and since it overrides something that has been rescued, such methods are
-        // already safely rescued by other ControlFlow logic.
-        if (dtype.isJsType() || dtype.isJsFunction()) {
-          for (JMethod method : dtype.getMethods()) {
-            if (method.isOrOverridesJsTypeMethod()
-                || method.isOrOverridesJsFunctionMethod()) {
-              rescue(method);
-            }
-          }
-          for (JField field : dtype.getFields()) {
-            if (field.isJsTypeMember()) {
-              rescue(field);
-            }
-          }
+      if (!(type instanceof JDeclaredType)) {
+        return;
+      }
+
+      /*
+       * We rescue all JsType member and JsFunction methods because we don't know if they'll be
+       * called from JS or not.
+       */
+      JDeclaredType declaredType = (JDeclaredType) type;
+
+      for (JMethod method : declaredType.getMethods()) {
+        if (method.canBeCalledExternally()) {
+          rescue(method);
+        }
+      }
+      for (JField field : declaredType.getFields()) {
+        if (field.canBeReferencedExternally()) {
+          rescue(field);
         }
       }
     }
@@ -775,10 +756,6 @@ public class ControlFlowAnalyzer {
       }
     }
 
-    private void rescueAndInstantiate(JClassType type) {
-      rescue(type, true, true);
-    }
-
     /**
      * The code is very tightly tied to the behavior of
      * Pruner.CleanupRefsVisitor. CleanUpRefsVisitor will prune unread
@@ -787,11 +764,10 @@ public class ControlFlowAnalyzer {
      * need to iterate over Pruner until reaching a stable point, so we avoid
      * actually rescuing such arguments until/unless the parameter is read.
      */
-    private boolean rescueArgumentsIfParametersCanBeRead(JMethodCall call, JMethod method) {
-      if (call.getInstance() != null) {
-        // Explicitly visit instance since we're returning false below.
-        this.accept(call.getInstance());
-      }
+    private void rescueArgumentsIfParametersCanBeRead(JMethodCall call) {
+      JMethod method = call.getTarget();
+      assert !method.canBePolymorphic();
+
       List<JExpression> args = call.getArgs();
       List<JParameter> params = method.getParams();
       int i = 0;
@@ -799,9 +775,7 @@ public class ControlFlowAnalyzer {
         JExpression arg = args.get(i);
         JParameter param = params.get(i);
         if (arg.hasSideEffects() || liveFieldsAndMethods.contains(param)
-            // rescue any args of JsInterface Prototype methods or JsInterface
-            || method.isOrOverridesJsTypeMethod()
-            || method.isOrOverridesJsFunctionMethod()
+            // rescue any args of JsInterface Prototype methods
             || program.isJsTypePrototype(method.getEnclosingType())) {
           this.accept(arg);
           continue;
@@ -812,7 +786,6 @@ public class ControlFlowAnalyzer {
       for (int c = args.size(); i < c; ++i) {
         this.accept(args.get(i));
       }
-      return false;
     }
 
     /**
@@ -853,19 +826,21 @@ public class ControlFlowAnalyzer {
       }
     }
 
-    /**
-     * If the type is instantiable, rescue any of its virtual methods that a
-     * previously seen method call could call.
-     */
-    private void rescueMembersIfInstantiable(JDeclaredType type) {
-      if (!instantiatedTypes.contains(type)) {
-        return;
+    private void rescueMembersAndInstantiateSuperInterfaces(JDeclaredType type) {
+      for (JInterfaceType intfType : type.getImplements()) {
+        rescue(intfType, true);
       }
+      rescueMembers(type);
+    }
+
+    /**
+     * Rescues any of type's virtual methods that a previously seen method call could call.
+     */
+    private void rescueMembers(JDeclaredType type) {
+      assert instantiatedTypes.contains(type);
+
       for (JMethod method : type.getMethods()) {
-        if (!method.isStatic() && (membersToRescueIfTypeIsInstantiated.contains(method)
-            // method may be called from JS as well
-           || method.isOrOverridesJsTypeMethod()
-           || method.isOrOverridesJsFunctionMethod())) {
+        if (!method.isStatic() && membersToRescueIfTypeIsInstantiated.contains(method)) {
           rescue(method);
         }
       }
@@ -900,7 +875,7 @@ public class ControlFlowAnalyzer {
     }
   }
 
-  private boolean isTypeInstantiatedOrJso(JType type) {
+  private boolean isTypeInstantiatedOrJso(JDeclaredType type) {
     if (type == null) {
       return false;
     }
@@ -1010,20 +985,6 @@ public class ControlFlowAnalyzer {
   }
 
   /**
-   * Forcibly rescue {@code typesToRescue}.
-   * <p>
-   * NOTE: this is used to rescue types that are made live by operations (e.g. casts) that
-   * have been eliminated by a normalization pass.
-   */
-  public void rescue(Iterable<JReferenceType> typesToRescue) {
-    // TODO(rluble): this functionality should go away, the AST should contain all the information
-    // needed to determine whether a type is live or not.
-    for (JReferenceType type : typesToRescue) {
-      rescuer.rescue(type, true, true);
-    }
-  }
-
-  /**
    * Specify the {@link DependencyRecorder} to be used for future traversals.
    * Specifying <code>null</code> means to stop recording dependencies.
    */
@@ -1054,17 +1015,27 @@ public class ControlFlowAnalyzer {
      */
     List<JDeclaredType> declaredTypes = program.getDeclaredTypes();
     for (JDeclaredType type : declaredTypes) {
+      // We rescue any JsType/JsFunction interfaces immediately. Although it is not precise, as
+      // interfaces are mostly free, we are fine. This is simpler than tracking where the objects
+      // may enter the system.
+      // More appropriate solution is to track casts and JSNI methods (see
+      // #canBeInstantiatedInJavaScript) but unfortunately casts are replaced at a later stage
+      // that causes type and all calls to be pruned.
+      if (type.canBeImplementedExternally()) {
+        rescuer.rescue(type, true);
+      }
+
       // first time through, record all exported methods
       for (JMethod method : type.getMethods()) {
-        if (method.isExported()) {
+        if (method.isJsInteropEntryPoint()) {
           // treat class as instantiated, since a ctor may be called from JS export
-          rescuer.rescue(method.getEnclosingType(), true, true);
+          rescuer.rescue(method.getEnclosingType(), true);
           traverseFrom(method);
         }
       }
       for (JField field : type.getFields()) {
-        if (field.isExported()) {
-          rescuer.rescue(field.getEnclosingType(), true, true);
+        if (field.isJsInteropEntryPoint()) {
+          rescuer.rescue(field.getEnclosingType(), true);
           rescuer.rescue(field);
         }
       }
@@ -1102,11 +1073,11 @@ public class ControlFlowAnalyzer {
    * execute as a result.
    */
   public void traverseFromInstantiationOf(JDeclaredType type) {
-    rescuer.rescue(type, true, true);
+    rescuer.rescue(type, true);
   }
 
   public void traverseFromReferenceTo(JDeclaredType type) {
-    rescuer.rescue(type, true, false);
+    rescuer.rescue(type, false);
   }
 
   /**

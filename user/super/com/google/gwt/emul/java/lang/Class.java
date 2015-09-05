@@ -16,9 +16,10 @@
 package java.lang;
 
 import com.google.gwt.core.client.JavaScriptObject;
-import com.google.gwt.core.client.impl.DoNotInline;
 
 import java.lang.reflect.Type;
+
+import javaemul.internal.annotations.DoNotInline;
 
 /**
  * Generally unsupported. This class is provided so that the GWT compiler can
@@ -384,6 +385,7 @@ public final class Class<T> implements Type {
     return (modifiers & PRIMITIVE) != 0;
   }
 
+  @Override
   public String toString() {
     return (isInterface() ? "interface " : (isPrimitive() ? "" : "class "))
         + getName();

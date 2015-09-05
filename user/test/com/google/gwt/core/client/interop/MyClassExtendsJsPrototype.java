@@ -15,7 +15,7 @@
  */
 package com.google.gwt.core.client.interop;
 
-class MyClassExtendsJsPrototype extends MyJsInterface.Prototype {
+class MyClassExtendsJsPrototype extends MyJsInterfaceWithPrototype.Prototype {
 
   MyClassExtendsJsPrototype() {
     setX(42);

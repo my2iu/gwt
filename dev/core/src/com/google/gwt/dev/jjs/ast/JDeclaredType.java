@@ -17,6 +17,7 @@ package com.google.gwt.dev.jjs.ast;
 
 import com.google.gwt.dev.jjs.SourceInfo;
 import com.google.gwt.dev.jjs.impl.GwtAstBuilder;
+import com.google.gwt.dev.jjs.impl.JjsUtils;
 import com.google.gwt.dev.util.StringInterner;
 import com.google.gwt.dev.util.collect.Lists;
 import com.google.gwt.thirdparty.guava.common.base.Preconditions;
@@ -50,10 +51,11 @@ import java.util.List;
 public abstract class JDeclaredType extends JReferenceType {
 
   private String jsPrototype;
-  private boolean isJsType;
-  private String exportNamespace = null;
-  private String exportName = null;
   private boolean isJsFunction;
+  private boolean isJsType;
+  private boolean isClassWideExport;
+  private String jsNamespace = null;
+  private String jsName = null;
 
   /**
    * The types of nested classes, https://docs.oracle.com/javase/tutorial/java/javaOO/nested.html
@@ -317,22 +319,14 @@ public abstract class JDeclaredType extends JReferenceType {
 
   /**
    * Returns the instance initializer ($init) method.
-   * Can only be called after making sure the class has an instance initializer method.
    *
    * @return The instance initializer method.
    */
-  public final JMethod getInitMethod() {
-    assert getMethods().size() > 1;
-    JMethod init = this.getMethods().get(1);
-
-    assert init != null;
-    assert init.getName().equals(GwtAstBuilder.INIT_NAME);
-    return init;
-  }
+  public abstract JMethod getInitMethod();
 
   @Override
   public String getJavahSignatureName() {
-    return "L" + name.replaceAll("_", "_1").replace('.', '_') + "_2";
+    return JjsUtils.javahSignatureFromName(name);
   }
 
   @Override
@@ -348,52 +342,33 @@ public abstract class JDeclaredType extends JReferenceType {
     return methods;
   }
 
+  @Override
   public boolean isJsType() {
     return isJsType;
   }
 
-  public boolean isOrExtendsJsType() {
-    if (isJsType()) {
-      return true;
-    }
-    for (JInterfaceType subIntf : getImplements()) {
-      if (subIntf.isJsType()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
+  @Override
   public boolean isJsFunction() {
     return isJsFunction;
   }
 
-  public boolean isOrExtendsJsFunction() {
-    if (isJsFunction()) {
-      return true;
-    }
-    for (JInterfaceType subInterface : getImplements()) {
-      if (subInterface.isJsFunction()) {
-        return true;
-      }
-    }
-    // We don't need to recurse as inheritance is not supported by JsFunction.
+  public boolean isJsFunctionImplementation() {
     return false;
   }
 
   public boolean isClassWideExport() {
-    return exportName != null;
+    return isClassWideExport;
   }
 
-  public boolean hasAnyExports() {
+  public boolean hasJsInteropEntryPoints() {
     for (JMethod method : getMethods()) {
-      if (method.isExported()) {
+      if (method.isJsInteropEntryPoint()) {
         return true;
       }
     }
 
     for (JField field : getFields()) {
-      if (field.isExported()) {
+      if (field.isJsInteropEntryPoint()) {
         return true;
       }
     }
@@ -461,8 +436,8 @@ public abstract class JDeclaredType extends JReferenceType {
   public void resolve(List<JInterfaceType> resolvedInterfaces, JDeclaredType pkgInfo) {
     assert JType.replaces(resolvedInterfaces, superInterfaces);
     superInterfaces = Lists.normalize(resolvedInterfaces);
-    if (exportNamespace == null) {
-      exportNamespace = computeExportNamespace(pkgInfo);
+    if (jsNamespace == null) {
+      jsNamespace = computeExportNamespace(pkgInfo);
     }
   }
 
@@ -470,7 +445,7 @@ public abstract class JDeclaredType extends JReferenceType {
     if (enclosingType != null) {
       return enclosingType.getQualifiedExportName();
     }
-    return pkgInfo != null && pkgInfo.exportNamespace != null ? pkgInfo.exportNamespace
+    return pkgInfo != null && pkgInfo.jsNamespace != null ? pkgInfo.jsNamespace
         : getPackageName();
   }
 
@@ -487,14 +462,13 @@ public abstract class JDeclaredType extends JReferenceType {
     this.isExternal = isExternal;
   }
 
-  public void setJsTypeInfo(boolean isJsType, String jsPrototype) {
+  public void setJsTypeInfo(boolean isJsType, String jsNamespace, String jsName,
+      boolean isClassWideExport, String jsPrototype) {
     this.isJsType = isJsType;
+    this.jsNamespace = jsNamespace;
+    this.jsName = jsName;
+    this.isClassWideExport = isClassWideExport;
     this.jsPrototype = jsPrototype;
-  }
-
-  public void setExportInfo(String exportNamespace, String exportName) {
-    this.exportNamespace = exportNamespace;
-    this.exportName = exportName;
   }
 
   public void setJsFunctionInfo(boolean isJsFunction) {
@@ -609,8 +583,8 @@ public abstract class JDeclaredType extends JReferenceType {
   }
 
   public String getQualifiedExportName() {
-    String simpleExportName = Strings.isNullOrEmpty(exportName) ? getSimpleName() : exportName;
-    return exportNamespace.isEmpty() ? simpleExportName : exportNamespace + "." + simpleExportName;
+    String simpleExportName = Strings.isNullOrEmpty(jsName) ? getSimpleName() : jsName;
+    return jsNamespace.isEmpty() ? simpleExportName : jsNamespace + "." + simpleExportName;
   }
 
   public NestedClassDisposition getClassDisposition() {

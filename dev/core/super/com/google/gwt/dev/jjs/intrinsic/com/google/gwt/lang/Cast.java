@@ -15,10 +15,11 @@
  */
 package com.google.gwt.lang;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkType;
+import static javaemul.internal.InternalPreconditions.checkType;
 
 import com.google.gwt.core.client.JavaScriptObject;
-import com.google.gwt.core.client.impl.HasNoSideEffects;
+
+import javaemul.internal.annotations.HasNoSideEffects;
 
 // CHECKSTYLE_NAMING_OFF: Uses legacy conventions of underscore prefixes.
 
@@ -38,13 +39,23 @@ final class Cast {
    * NOTE: it is important that the field is left uninitialized so that Cast does not
    * require a clinit.
    */
+  // NOTE: if any of these three are edited, update JProgram.DispatchType's constructor
   private static JavaScriptObject stringCastMap;
+
+  // the next two are implemented exactly as the former
+  private static JavaScriptObject doubleCastMap;
+  private static JavaScriptObject booleanCastMap;
 
   @HasNoSideEffects
   static native boolean canCast(Object src, JavaScriptObject dstId) /*-{
     return @com.google.gwt.lang.Cast::isJavaString(*)(src) &&
         !!@com.google.gwt.lang.Cast::stringCastMap[dstId] ||
-        src.@java.lang.Object::castableTypeMap && !!src.@java.lang.Object::castableTypeMap[dstId];
+        src.@java.lang.Object::castableTypeMap && !!src.@java.lang.Object::castableTypeMap[dstId] ||
+        @com.google.gwt.lang.Cast::isJavaDouble(*)(src) &&
+        !!@com.google.gwt.lang.Cast::doubleCastMap[dstId] ||
+        // this occurs last because it is much rarer and less likely to be in hot code
+        @com.google.gwt.lang.Cast::isJavaBoolean(*)(src) &&
+        !!@com.google.gwt.lang.Cast::booleanCastMap[dstId];
   }-*/;
 
   @HasNoSideEffects
@@ -64,8 +75,19 @@ final class Cast {
     return src;
   }
 
+  // NOTE: if any of these three are edited, update JProgram.DispatchType's constructor
   static Object dynamicCastToString(Object src) {
     checkType(src == null || isJavaString(src));
+    return src;
+  }
+
+  static Object dynamicCastToDouble(Object src) {
+    checkType(src == null || isJavaDouble(src));
+    return src;
+  }
+
+  static Object dynamicCastToBoolean(Object src) {
+    checkType(src == null || isJavaBoolean(src));
     return src;
   }
 
@@ -105,7 +127,7 @@ final class Cast {
     return (src != null) && canCast(src, dstId);
   }
 
-  static boolean instanceOfJsType(Object src, JavaScriptObject dstId, String jsType) {
+  static boolean instanceOfJsPrototype(Object src, JavaScriptObject dstId, String jsType) {
     return instanceOf(src, dstId) || jsInstanceOf(src, jsType);
   }
 
@@ -139,12 +161,12 @@ final class Cast {
 
   @HasNoSideEffects
   static boolean isJavaScriptObject(Object src) {
-    return !isJavaString(src) && !Util.hasTypeMarker(src);
+    return isJsObjectOrFunction(src) && !Util.hasTypeMarker(src);
   }
 
   /**
    * Uses the not operator to perform a null-check; do NOT use on anything that
-   * could be a String.
+   * could be a String, 'unboxed' Double, or 'unboxed' Boolean.
    */
   static native boolean isNotNull(Object src) /*-{
     // Coerce to boolean.
@@ -153,7 +175,7 @@ final class Cast {
 
   /**
    * Uses the not operator to perform a null-check; do NOT use on anything that
-   * could be a String.
+   * could be a String, 'unboxed' Double, or 'unboxed' Boolean.
    */
   static native boolean isNull(Object src) /*-{
     return !src;
@@ -256,6 +278,12 @@ final class Cast {
     return o;
   }
 
+  @HasNoSideEffects
+  static native boolean isJsObjectOrFunction(Object src) /*-{
+    return typeof(src) === "object" || typeof(src) === "function";
+  }-*/;
+
+  // NOTE: if any of these three are edited, update JProgram.DispatchType's constructor
   /**
    * Returns whether the Object is a Java String.
    *
@@ -264,6 +292,26 @@ final class Cast {
   @HasNoSideEffects
   static native boolean isJavaString(Object src) /*-{
     return typeof(src) === "string";
+  }-*/;
+
+  /**
+   * Returns whether the Object is a Java Double.
+   *
+   * Java Numbers are translated to JavaScript numbers.
+   */
+  @HasNoSideEffects
+  static native boolean isJavaDouble(Object src) /*-{
+    return typeof(src) === "number";
+  }-*/;
+
+  /**
+   * Returns whether the Object is a Java Boolean. (*)
+   *
+   * Java Booleans are translated to JavaScript booleans.
+   */
+  @HasNoSideEffects
+  static native boolean isJavaBoolean(Object src) /*-{
+    return typeof(src) === "boolean";
   }-*/;
 
   /**

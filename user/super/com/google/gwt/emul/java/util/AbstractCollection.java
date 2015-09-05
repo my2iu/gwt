@@ -15,9 +15,9 @@
  */
 package java.util;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkNotNull;
+import static javaemul.internal.InternalPreconditions.checkNotNull;
 
-import com.google.gwt.lang.Array;
+import javaemul.internal.ArrayHelper;
 
 /**
  * Skeletal implementation of the Collection interface. <a
@@ -73,10 +73,12 @@ public abstract class AbstractCollection<E> implements Collection<E> {
     return true;
   }
 
+  @Override
   public boolean isEmpty() {
     return size() == 0;
   }
 
+  @Override
   public abstract Iterator<E> iterator();
 
   @Override
@@ -126,7 +128,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
   public <T> T[] toArray(T[] a) {
     int size = size();
     if (a.length < size) {
-      a = Array.createFrom(a, size);
+      a = ArrayHelper.createFrom(a, size);
     }
     Object[] result = a;
     Iterator<E> it = iterator();

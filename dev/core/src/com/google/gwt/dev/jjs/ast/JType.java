@@ -69,6 +69,18 @@ public abstract class JType extends JNode implements HasName, CanBeFinal {
     return false;
   }
 
+  public boolean isJsType() {
+    return false;
+  }
+
+  public boolean isJsFunction() {
+    return false;
+  }
+
+  public boolean canBeImplementedExternally() {
+    return false;
+  }
+
   /**
    * Returns {@code true} if this is a JavaScriptObject type.
    */
@@ -108,7 +120,8 @@ public abstract class JType extends JNode implements HasName, CanBeFinal {
   }
 
   /**
-   * Returns a customized description to be used by {@link ToStringGenerationVisitor}.
+   * Returns a customized description to be used by {@link
+   * com.google.gwt.dev.jjs.impl.ToStringGenerationVisitor}.
    */
   public String getDescription() {
     return getName();
@@ -130,7 +143,7 @@ public abstract class JType extends JNode implements HasName, CanBeFinal {
 
   /**
    * Returns the (closest) enum supertype if the type is a subclass of an enum; it returns
-   * {@code this} if {@code this} is a {@link }JEnumType} and {@code null} otherwise.
+   * {@code this} if {@code this} is a {@link JEnumType} and {@code null} otherwise.
    */
   public JEnumType isEnumOrSubclass() {
     return null;
@@ -167,5 +180,4 @@ public abstract class JType extends JNode implements HasName, CanBeFinal {
     }
     return originalType.isExternal() && originalType.getName().equals(this.getName());
   }
-
 }

@@ -85,6 +85,11 @@ public class JArrayType extends JReferenceType {
   }
 
   @Override
+  public boolean canBeImplementedExternally() {
+    return getLeafType().canBeImplementedExternally();
+  }
+
+  @Override
   public boolean isJsoType() {
     return false;
   }

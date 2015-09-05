@@ -15,9 +15,9 @@
  */
 package java.util;
 
-import com.google.gwt.core.client.JsDate;
-
 import java.io.Serializable;
+
+import javaemul.internal.JsDate;
 
 /**
  * Represents a date and time.
@@ -66,14 +66,6 @@ public class Date implements Cloneable, Comparable<Date>, Serializable {
   }
 
   /**
-   * Package private factory for JSNI use, to allow cheap creation of dates from
-   * doubles.
-   */
-  static Date createFrom(double milliseconds) {
-    return new Date(milliseconds, false);
-  }
-
-  /**
    * JavaScript Date instance.
    */
   private final JsDate jsdate;
@@ -105,13 +97,6 @@ public class Date implements Cloneable, Comparable<Date>, Serializable {
     this(Date.parse(date));
   }
 
-  /**
-   * For use by {@link #createFrom(double)}, should inline away.
-   */
-  Date(double milliseconds, boolean dummyArgForOverloadResolution) {
-    jsdate = JsDate.create(milliseconds);
-  }
-
   public boolean after(Date when) {
     return getTime() > when.getTime();
   }
@@ -124,6 +109,7 @@ public class Date implements Cloneable, Comparable<Date>, Serializable {
     return new Date(getTime());
   }
 
+  @Override
   public int compareTo(Date other) {
     return Long.compare(getTime(), other.getTime());
   }

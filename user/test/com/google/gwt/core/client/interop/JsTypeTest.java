@@ -19,6 +19,8 @@ import static com.google.gwt.core.client.ScriptInjector.TOP_WINDOW;
 
 import com.google.gwt.core.client.JavaScriptObject;
 import com.google.gwt.core.client.ScriptInjector;
+import com.google.gwt.core.client.js.JsFunction;
+import com.google.gwt.core.client.js.JsType;
 import com.google.gwt.junit.client.GWTTestCase;
 
 import java.util.Iterator;
@@ -100,6 +102,17 @@ public class JsTypeTest extends GWTTestCase {
         == callIntFunction(concreteJsTypeSubclass, "publicMethod"));
   }
 
+  public void testConcreteJsTypeNoTypeTightenField() {
+    // If we type-tighten, java side will see no calls and think that field could only AImpl1.
+    ConcreteJsType concreteJsType = new ConcreteJsType();
+    setTheField(concreteJsType, new ConcreteJsType.AImpl2());
+    assertEquals(101, concreteJsType.notTypeTightenedField.x());
+  }
+
+  private native void setTheField(ConcreteJsType obj, ConcreteJsType.A value)/*-{
+    obj.notTypeTightenedField = value;
+  }-*/;
+
   public void testRevealedOverrideJsType() {
     PlainParentType plainParentType = new PlainParentType();
     RevealedOverrideSubType revealedOverrideSubType = new RevealedOverrideSubType();
@@ -141,12 +154,29 @@ public class JsTypeTest extends GWTTestCase {
     assertEquals(0, object.getX());
   }
 
+  public void testProtectedNames() {
+    MyJsInterfaceWithProtectedNames obj = createMyJsInterfaceWithProtectedNames();
+    assertEquals("var", obj.var());
+    assertEquals("nullField", obj.getNullField());
+    assertEquals("import", obj.getImport());
+    obj.setImport("import2");
+    assertEquals("import2", obj.getImport());
+  }
+
+  private static native MyJsInterfaceWithProtectedNames createMyJsInterfaceWithProtectedNames() /*-{
+    var a = {};
+    a["nullField"] = "nullField";
+    a["import"] = "import";
+    a["var"] = function() { return "var"; };
+    return a;
+  }-*/;
+
   public void testCasts() {
-    MyJsInterface myClass;
-    assertNotNull(myClass = (MyJsInterface) createMyJsInterface());
+    MyJsInterfaceWithPrototype myClass;
+    assertNotNull(myClass = (MyJsInterfaceWithPrototype) createMyJsInterface());
 
     try {
-      assertNotNull(myClass = (MyJsInterface) createNativeButton());
+      assertNotNull(myClass = (MyJsInterfaceWithPrototype) createNativeButton());
       fail();
     } catch (ClassCastException cce) {
       // Expected.
@@ -164,7 +194,7 @@ public class JsTypeTest extends GWTTestCase {
     assertNotNull(button);
   }
 
-  public void testInstanceOf_jsoWithSyntheticProto() {
+  public void testInstanceOf_jsoWithProto() {
     Object object = createMyJsInterface();
 
     assertTrue(object instanceof Object);
@@ -172,13 +202,16 @@ public class JsTypeTest extends GWTTestCase {
     assertFalse(object instanceof HTMLButtonElement);
     assertFalse(object instanceof HTMLElement);
     assertFalse(object instanceof Iterator);
-    assertTrue(object instanceof MyJsInterface);
+    assertTrue(object instanceof MyJsInterfaceWithPrototype);
+    assertFalse(object instanceof MyJsInterfaceWithPrototypeImpl);
     assertTrue(object instanceof ElementLikeJsInterface);
+    assertFalse(object instanceof ElementLikeJsInterfaceImpl);
     assertTrue(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
     assertFalse(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertFalse(object instanceof ConcreteJsType);
   }
 
-  public void testInstanceOf_jsoSansProto() {
+  public void testInstanceOf_jsoWithoutProto() {
     Object object = JavaScriptObject.createObject();
 
     assertTrue(object instanceof Object);
@@ -186,10 +219,13 @@ public class JsTypeTest extends GWTTestCase {
     assertFalse(object instanceof HTMLButtonElement);
     assertFalse(object instanceof HTMLElement);
     assertFalse(object instanceof Iterator);
-    assertFalse(object instanceof MyJsInterface);
+    assertFalse(object instanceof MyJsInterfaceWithPrototype);
+    assertFalse(object instanceof MyJsInterfaceWithPrototypeImpl);
     assertTrue(object instanceof ElementLikeJsInterface);
+    assertFalse(object instanceof ElementLikeJsInterfaceImpl);
     assertTrue(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
     assertFalse(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertFalse(object instanceof ConcreteJsType);
   }
 
   public void testInstanceOf_jsoWithNativeButtonProto() {
@@ -200,13 +236,70 @@ public class JsTypeTest extends GWTTestCase {
     assertTrue(object instanceof HTMLButtonElement);
     assertTrue(object instanceof HTMLElement);
     assertFalse(object instanceof Iterator);
-    assertFalse(object instanceof MyJsInterface);
+    assertFalse(object instanceof MyJsInterfaceWithPrototype);
+    assertFalse(object instanceof MyJsInterfaceWithPrototypeImpl);
     assertTrue(object instanceof ElementLikeJsInterface);
+    assertFalse(object instanceof ElementLikeJsInterfaceImpl);
     assertTrue(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
     assertTrue(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertFalse(object instanceof ConcreteJsType);
   }
 
-  public void testInstanceOf_javaImplementorOfInterfaceWithProto() {
+  public void testInstanceOf_implementsJsType() {
+    // Foils type tightening.
+    Object object = alwaysTrue() ? new ElementLikeJsInterfaceImpl() : new Object();
+
+    assertTrue(object instanceof Object);
+    assertFalse(object instanceof HTMLAnotherElement);
+    assertFalse(object instanceof HTMLButtonElement);
+    assertFalse(object instanceof HTMLElement);
+    assertFalse(object instanceof Iterator);
+    assertFalse(object instanceof MyJsInterfaceWithPrototype);
+    assertFalse(object instanceof MyJsInterfaceWithPrototypeImpl);
+    assertTrue(object instanceof ElementLikeJsInterface);
+    assertTrue(object instanceof ElementLikeJsInterfaceImpl);
+    assertFalse(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
+    assertFalse(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertFalse(object instanceof ConcreteJsType);
+  }
+
+  public void testInstanceOf_implementsJsTypeWithPrototype() {
+    // Foils type tightening.
+    Object object = alwaysTrue() ? new MyJsInterfaceWithPrototypeImpl() : new Object();
+
+    assertTrue(object instanceof Object);
+    assertFalse(object instanceof HTMLAnotherElement);
+    assertFalse(object instanceof HTMLButtonElement);
+    assertFalse(object instanceof HTMLElement);
+    assertFalse(object instanceof Iterator);
+    assertTrue(object instanceof MyJsInterfaceWithPrototype);
+    assertTrue(object instanceof MyJsInterfaceWithPrototypeImpl);
+    assertFalse(object instanceof ElementLikeJsInterface);
+    assertFalse(object instanceof ElementLikeJsInterfaceImpl);
+    assertFalse(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
+    assertFalse(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertFalse(object instanceof ConcreteJsType);
+  }
+
+  public void testInstanceOf_concreteJsType() {
+    // Foils type tightening.
+    Object object = alwaysTrue() ? new ConcreteJsType() : new Object();
+
+    assertTrue(object instanceof Object);
+    assertFalse(object instanceof HTMLAnotherElement);
+    assertFalse(object instanceof HTMLButtonElement);
+    assertFalse(object instanceof HTMLElement);
+    assertFalse(object instanceof Iterator);
+    assertFalse(object instanceof MyJsInterfaceWithPrototype);
+    assertFalse(object instanceof MyJsInterfaceWithPrototypeImpl);
+    assertFalse(object instanceof ElementLikeJsInterface);
+    assertFalse(object instanceof ElementLikeJsInterfaceImpl);
+    assertFalse(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
+    assertFalse(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
+    assertTrue(object instanceof ConcreteJsType);
+  }
+
+  public void testInstanceOf_extendsJsTypeWithProto() {
     // Foils type tightening.
     Object object = alwaysTrue() ? new MyCustomHtmlButtonWithIterator() : new Object();
 
@@ -221,7 +314,7 @@ public class JsTypeTest extends GWTTestCase {
      * the spec decides, fix JTypeOracle so that canTheoreticallyCast returns the appropriate
      * result, as well as add a test here that can be type-tightened.
      */
-    assertFalse(object instanceof MyJsInterface);
+    assertFalse(object instanceof MyJsInterfaceWithPrototype);
     assertTrue(object instanceof ElementLikeJsInterface);
     assertTrue(object instanceof MyJsInterfaceWithOnlyInstanceofReference);
     assertTrue(object instanceof MyJsPrototypeWithOnlyInstanceofReference);
@@ -232,7 +325,7 @@ public class JsTypeTest extends GWTTestCase {
     Object obj2 = createMyWrongNamespacedJsInterface();
 
     assertTrue(obj1 instanceof MyNamespacedJsInterface);
-    assertFalse(obj1 instanceof MyJsInterface);
+    assertFalse(obj1 instanceof MyJsInterfaceWithPrototype);
 
     assertFalse(obj2 instanceof MyNamespacedJsInterface);
   }
@@ -254,22 +347,6 @@ public class JsTypeTest extends GWTTestCase {
     assertEquals(200, callPublicMethodFromEnumerationSubclass(MyEnumWithSubclassGen.B));
     assertEquals(1, callPublicMethodFromEnumerationSubclass(MyEnumWithSubclassGen.C));
   }
-
-  public void testBridgeMethodLongCoercion() {
-    assertEquals(42.0, callLongMethod(40.0, 2.0));
-    assertEquals(82.0, callStaticLongMethod(80.0, 2.0));
-  }
-
-  private native double callLongMethod(double a, double b) /*-{
-    var global = window.goog && window.goog.global || $wnd;
-    var bridgeMethodClass = global.createLongCoercionBridgeMethod();
-    return bridgeMethodClass.addLong(a,b);
-  }-*/;
-
-  private native double callStaticLongMethod(double a, double b) /*-{
-    var global = window.goog && window.goog.global || $wnd;
-    return global.addLongStatic(a,b);
-  }-*/;
 
   private static native boolean alwaysTrue() /*-{
     return !!$wnd;
@@ -331,5 +408,75 @@ public class JsTypeTest extends GWTTestCase {
     for (String field : fields) {
       assertFalse("Field '" + field + "' should not be exported", hasField(obj, field));
     }
+  }
+
+  @JsType
+  interface SimpleJsTypeFieldInterface {
+  }
+
+  static class SimpleJsTypeFieldClass implements SimpleJsTypeFieldInterface {
+  }
+
+  @JsType
+  static class SimpleJsTypeWithField {
+    public SimpleJsTypeFieldInterface someField;
+  }
+
+  public void testJsTypeField() {
+    new SimpleJsTypeFieldClass();
+    SimpleJsTypeWithField holder = new SimpleJsTypeWithField();
+    fillJsTypeField(holder);
+    SimpleJsTypeFieldInterface someField = holder.someField;
+    assertNotNull(someField);
+  }
+
+  private native void fillJsTypeField(SimpleJsTypeWithField jstype) /*-{
+    jstype.someField = {};
+  }-*/;
+
+  @JsType
+  interface InterfaceWithSingleJavaConcrete {
+    int m();
+  }
+
+  static class JavaConcrete implements InterfaceWithSingleJavaConcrete {
+    public int m() {
+      return 5;
+    }
+  }
+
+  private native Object nativeObjectImplementingM() /*-{
+    return {m: function() { return 3;} }
+  }-*/;
+
+  public void testSingleJavaConcreteInterface() {
+    // Create a couple of instances and use the objects in some way to avoid complete pruning
+    // of JavaConcrete
+    assertTrue(new JavaConcrete() != new JavaConcrete());
+    assertSame(5, new JavaConcrete().m());
+    assertSame(3, ((InterfaceWithSingleJavaConcrete) nativeObjectImplementingM()).m());
+  }
+
+  @JsFunction
+  interface JsFunctionInterface {
+    int m();
+  }
+
+  static class JavaConcreteJsFunction implements JsFunctionInterface {
+    public int m() {
+      return 5;
+    }
+  }
+
+  private native Object nativeJsFunction() /*-{
+    return function() { return 3;};
+  }-*/;
+
+  public void testSingleJavaConcreteJsFunction() {
+    // Create a couple of instances and use the objects in some way to avoid complete pruning
+    // of JavaConcrete
+    assertTrue(new JavaConcreteJsFunction() != new JavaConcreteJsFunction());
+    assertSame(5, new JavaConcreteJsFunction().m());
+    assertSame(3, ((JsFunctionInterface) nativeJsFunction()).m());
   }
 }

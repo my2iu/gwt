@@ -15,7 +15,7 @@
  */
 package com.google.gwt.core.client;
 
-import com.google.gwt.core.client.impl.Impl;
+import javaemul.internal.HashCodes;
 
 /**
  * An opaque handle to a native JavaScript object. A
@@ -148,7 +148,7 @@ public class JavaScriptObject {
    */
   @Override
   public final int hashCode() {
-    return Impl.getHashCode(this);
+    return HashCodes.getObjectIdentityHashCode(this);
   }
 
   /**

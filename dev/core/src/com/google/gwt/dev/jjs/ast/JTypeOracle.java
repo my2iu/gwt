@@ -132,21 +132,9 @@ public class JTypeOracle implements Serializable {
     private String javaLangObject;
   }
 
-  private Set<JReferenceType> instantiatedJsoTypesViaCast = Sets.newHashSet();
-
-  public void setInstantiatedJsoTypesViaCast(Set<JReferenceType> instantiatedJsoTypesViaCast) {
-    this.instantiatedJsoTypesViaCast = instantiatedJsoTypesViaCast;
-  }
-
-  public Set<JReferenceType> getInstantiatedJsoTypesViaCast() {
-    return instantiatedJsoTypesViaCast;
-  }
-
   /**
-   * A method needs a JsInterop bridge if any of the following are true:
-   * 1) the method name conflicts with a method name of a non-JsType/JsExport method in a superclass
-   * 2) the method returns or accepts Single-Abstract-Method types
-   * 3) the method returns or accepts JsAware/JsConvert types.
+   * A method needs a JsInterop bridge if the method name conflicts with a method name of a
+   * non-JsType/JsExport method in a superclass.
    */
   public boolean needsJsInteropBridgeMethod(JMethod x) {
     /*
@@ -189,12 +177,12 @@ public class JTypeOracle implements Serializable {
      */
     // covariant methods need JS bridges
     List<JParameter> xParams = x.getParams();
-    if (x.isOrOverridesJsTypeMethod()) {
+    if (x.isOrOverridesJsMethod()) {
       for (JMethod other : x.getEnclosingType().getMethods()) {
          if (other == x) {
            continue;
          }
-        if (other.isOrOverridesJsTypeMethod() && x.getName().equals(other.getName())) {
+        if (other.isOrOverridesJsMethod() && x.getName().equals(other.getName())) {
            List<JParameter> otherParams = other.getParams();
            if (otherParams.size() == xParams.size()) {
              for (int i = 0; i < otherParams.size(); i++) {
@@ -211,26 +199,14 @@ public class JTypeOracle implements Serializable {
       }
     }
 
-    if (x.needsVtable() && x.isOrOverridesJsTypeMethod()) {
+    if (x.needsVtable() && x.isOrOverridesJsMethod()) {
       for (JMethod override : x.getOverriddenMethods()) {
-        if (!override.isOrOverridesJsTypeMethod()) {
+        if (!override.isOrOverridesJsMethod()) {
           return true;
         }
       }
     }
 
-    // implicit builtin @JsConvert, longs are converted
-    if (x.isOrOverridesJsTypeMethod() || x.isExported()) {
-      if (x.getOriginalReturnType() == JPrimitiveType.LONG) {
-        return true;
-      }
-      for (JParameter p : xParams) {
-        if (p.getType() == JPrimitiveType.LONG) {
-          return true;
-        }
-      }
-    }
-    // TODO (cromwellian): add SAM and JsAware/Convert cases in follow up
     return false;
   }
 
@@ -519,40 +495,23 @@ public class JTypeOracle implements Serializable {
    * True if the type is a JSO or interface implemented by JSO or a JsType without prototype.
    */
   public boolean canCrossCastLikeJso(JType type) {
-    JDeclaredType dtype = getNearestJsType(type, false);
-    return canBeJavaScriptObject(type) || (dtype instanceof JInterfaceType
-        && isOrExtendsJsType(type, false) && !isOrExtendsJsType(type, true));
+    return canBeJavaScriptObject(type) || isJsTypeInterfaceWithoutPrototype(type);
   }
 
-  /**
-   * True if the type is a JSO or JSO Interface that is not dually implemented, or is a JsType
-   * without the prototype that is not implemented by a Java class.
-   */
-  public boolean willCrossCastLikeJso(JType type) {
-    return isEffectivelyJavaScriptObject(type) || canCrossCastLikeJso(type)
-        && type instanceof JInterfaceType && !hasLiveImplementors(type);
+  public boolean isJsTypeInterfaceWithoutPrototype(JType type) {
+    return isJsTypeInterface(type, false);
   }
 
-  public boolean hasLiveImplementors(JType type) {
-    if (!optimize) {
-      // Assume the worst case, that the provided type does have live implementors.
-      return true;
+  public boolean isJsTypeInterfaceWithPrototype(JType type) {
+    return isJsTypeInterface(type, true);
+  }
+
+  private boolean isJsTypeInterface(JType type, boolean hasPrototype) {
+    if (!type.isJsType() || !(type instanceof JInterfaceType)) {
+      return false;
     }
-    if (type instanceof JInterfaceType) {
-      for (JReferenceType impl : getTypes(classesByImplementingInterface.get(type.getName()))) {
-        if (isInstantiatedType((JClassType) impl)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * True if the type is a JSO or interface implemented by a JSO, or a JsType, or a JsFunction.
-   */
-  public boolean canBeInstantiatedInJavascript(JType type) {
-    return canBeJavaScriptObject(type) || isJsType(type) || isJsFunction(type);
+    String prototype = ((JInterfaceType) type).getJsPrototype();
+    return hasPrototype ? prototype != null : prototype == null;
   }
 
   public boolean castFailsTrivially(JReferenceType fromType, JReferenceType toType) {
@@ -801,18 +760,6 @@ public class JTypeOracle implements Serializable {
     return null;
   }
 
-  /**
-   * Get the JsFunction method of {@code type}.
-   */
-  public JMethod getJsFunctionMethod(JClassType type) {
-    for (JMethod method : type.getMethods()) {
-      if (method.isOrOverridesJsFunctionMethod()) {
-        return method;
-      }
-    }
-    return (type.getSuperClass() != null) ? getJsFunctionMethod(type.getSuperClass()) : null;
-  }
-
   public JMethod getInstanceMethodBySignature(JClassType type, String signature) {
     return getOrCreateInstanceMethodsBySignatureForType(type).get(signature);
   }
@@ -900,9 +847,6 @@ public class JTypeOracle implements Serializable {
       Iterables.addAll(castableDestinationTypes,
           getTypes(implementedInterfacesByClass.get(type.getName())));
     }
-    if (willCrossCastLikeJso(type)) {
-      ensureTypeExistsAndAppend(JProgram.JAVASCRIPTOBJECT, castableDestinationTypes);
-    }
     // Do not add itself if it is a JavaScriptObject subclass, add JavaScriptObject.
     if (type.isJsoType()) {
       ensureTypeExistsAndAppend(JProgram.JAVASCRIPTOBJECT, castableDestinationTypes);
@@ -923,25 +867,6 @@ public class JTypeOracle implements Serializable {
 
   public boolean isDualJsoInterface(JType maybeDualImpl) {
     return dualImplInterfaces.contains(maybeDualImpl.getName());
-  }
-
-  /**
-   * Returns the method definition where {@code method} is first defined in a class.
-   */
-  public JMethod getTopMostDefinition(JMethod method) {
-    if (method.getEnclosingType() instanceof JInterfaceType) {
-      return null;
-    }
-    JMethod currentMethod = method;
-    for (JMethod overriddenMethod : method.getOverriddenMethods()) {
-      if (overriddenMethod.getEnclosingType() instanceof JInterfaceType) {
-        continue;
-      }
-      if (isSuperClass(currentMethod.getEnclosingType(), overriddenMethod.getEnclosingType())) {
-        currentMethod = overriddenMethod;
-      }
-    }
-    return currentMethod;
   }
 
   /**
@@ -999,14 +924,8 @@ public class JTypeOracle implements Serializable {
         return true;
       }
     }
-    // TODO(rluble): ControlFlowAnalyzer should be responsible for making sure that these types
-    // are considered live. THIS IS A HACK. In particular this method and the specialized
-    // version for JDeclaredType should have the same semantics.
-    return isJsType(type) || hasAnyExports(type) || isJsFunction(type);
-  }
 
-  private boolean hasAnyExports(JReferenceType type) {
-    return type instanceof JDeclaredType ? ((JDeclaredType) type).hasAnyExports() : false;
+    return false;
   }
 
   private boolean isArrayInterface(JType type) {
@@ -1029,28 +948,6 @@ public class JTypeOracle implements Serializable {
 
   public boolean isSingleJsoImpl(JType type) {
     return type instanceof JReferenceType && getSingleJsoImpl((JReferenceType) type) != null;
-  }
-
-  /**
-   * Whether the type is a JS interface (does not check supertypes).
-   */
-  public boolean isJsType(JType type) {
-    return type instanceof JDeclaredType && ((JDeclaredType) type).isJsType();
-  }
-
-  /**
-   * Whether the type or any supertypes is a JS type, optionally, only return true if
-   * one of the types has a js prototype.
-   */
-  public boolean isOrExtendsJsType(JType type, boolean mustHavePrototype) {
-    return getNearestJsType(type, mustHavePrototype) != null;
-  }
-
-  /**
-   * Whether the type is a JsFunction interface.
-   */
-  public boolean isJsFunction(JType type) {
-    return type instanceof JInterfaceType && ((JInterfaceType) type).isJsFunction();
   }
 
   /**

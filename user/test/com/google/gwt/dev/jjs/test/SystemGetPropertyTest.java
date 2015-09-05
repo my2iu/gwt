@@ -18,7 +18,7 @@ import com.google.gwt.junit.Platform;
 import com.google.gwt.junit.client.GWTTestCase;
 
 /**
- * Tests GWT.getProperty.
+ * Tests System.getProperty with collapsed properties.
  */
 public class SystemGetPropertyTest extends GWTTestCase {
 
@@ -27,7 +27,7 @@ public class SystemGetPropertyTest extends GWTTestCase {
     return "com.google.gwt.dev.jjs.SystemGetPropertyTest";
   }
 
-  // TODO(rluble): Remove DoNotRun here is System.getProperty is ever implemented for devmode.
+  // In DevMode System.getProperty is routed to the standard Java implementation.
   @DoNotRunWith(Platform.Devel)
   public void testBindingProperties() {
     assertEquals("two", System.getProperty("collapsedProperty"));
@@ -36,16 +36,5 @@ public class SystemGetPropertyTest extends GWTTestCase {
     String expectedResult = "safari".equals(System.getProperty("user.agent")) ?
         "InSafari" : "NotInSafari";
     assertEquals(expectedResult, System.getProperty("someDynamicProperty"));
-  }
-
-  @DoNotRunWith(Platform.Devel)
-  public void testConfigurationProperties() {
-    assertNull(System.getProperty("nonExistent"));
-    assertEquals("conf", System.getProperty("someConfigurationProperty"));
-    assertEquals("conf", System.getProperty("someConfigurationProperty", "default"));
-  }
-
-  public void testDefaultValues() {
-    assertEquals("default", System.getProperty("nonExistent", "default"));
   }
 }

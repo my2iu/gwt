@@ -17,7 +17,7 @@ package com.google.gwt.dev.jjs;
 
 import com.google.gwt.core.ext.TreeLogger;
 import com.google.gwt.core.ext.UnableToCompleteException;
-import com.google.gwt.dev.PrecompileTaskOptions;
+import com.google.gwt.dev.CompilerContext;
 import com.google.gwt.dev.cfg.ConfigurationProperties;
 import com.google.gwt.dev.javac.CompilationState;
 import com.google.gwt.dev.javac.testing.impl.JavaResourceBase;
@@ -82,21 +82,27 @@ public class JavaAstConstructor {
           "import com.google.gwt.core.client.JavaScriptObject;",
           "public final class Cast {",
           "  private static JavaScriptObject stringCastMap;",
+          "  private static JavaScriptObject doubleCastMap;",
+          "  private static JavaScriptObject booleanCastMap;",
           "  public static native String charToString(char x) /*-{ }-*/;",
           "  public static Object dynamicCast(Object src, int dstId) { return src;}",
           "  public static Object dynamicCastAllowJso(Object src, int dstId) { return src;}",
           "  public static Object dynamicCastJso(Object src) { return src;}",
           "  public static Object dynamicCastToString(Object src) { return src;}",
+          "  public static Object dynamicCastToDouble(Object src) { return src;}",
+          "  public static Object dynamicCastToBoolean(Object src) { return src;}",
           "  public static Object dynamicCastWithPrototype(Object src, int dstId, String jsType) { return src;}",
           "  public static Object dynamicCastToJsFunction(Object src) { return src; }",
           "  public static boolean instanceOf(Object src, int dstId) { return false;}",
           "  public static boolean hasJavaObjectVirtualDispatch(Object o) { return true; }",
           "  public static boolean isJavaArray(Object o) { return false; }",
           "  public static boolean isJavaString(Object o) { return true; }",
+          "  public static boolean isJavaDouble(Object o) { return true; }",
+          "  public static boolean isJavaBoolean(Object o) { return true; }",
           "  public static boolean isJavaScriptObject(Object o) { return true; }",
           "  public static boolean instanceOfOrJso(Object src, int dst) { return false;}",
           "  public static boolean instanceOfJso(Object src) { return false;}",
-          "  public static boolean instanceOfJsType(Object src, JavaScriptObject dstId, String jsType)  { return false;}",
+          "  public static boolean instanceOfJsPrototype(Object src, JavaScriptObject dstId, String jsType)  { return false;}",
           "  public static boolean instanceOfJsFunction(Object src) { return false; }",
           "  public static native boolean isNull(Object a) /*-{ }-*/;",
           "  public static native boolean isNotNull(Object a) /*-{ }-*/;",
@@ -264,6 +270,7 @@ public class JavaAstConstructor {
               "  }",
               "  public static void modernizeBrowser() {}",
               "  public static void emptyMethod() {}",
+              "  public static void getClassPrototype() {}",
               "}"
           );
         }
@@ -353,10 +360,10 @@ public class JavaAstConstructor {
   };
 
   public static JProgram construct(TreeLogger logger, CompilationState state,
-      PrecompileTaskOptions options, ConfigurationProperties config,
+      CompilerContext compilerContext, ConfigurationProperties config,
       String... entryPoints) throws UnableToCompleteException {
-    options.setEnableAssertions(true);
-    JProgram jprogram = AstConstructor.construct(logger, state, options, config);
+    compilerContext.getOptions().setEnableAssertions(true);
+    JProgram jprogram = AstConstructor.construct(logger, state, compilerContext, config);
 
     // Add entry methods for entry points.
     for (String entryPoint : entryPoints) {

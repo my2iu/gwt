@@ -39,7 +39,6 @@ import com.google.gwt.dev.jjs.ast.JProgram;
 import com.google.gwt.dev.jjs.impl.ArrayNormalizer;
 import com.google.gwt.dev.jjs.impl.CatchBlockNormalizer;
 import com.google.gwt.dev.jjs.impl.ComputeCastabilityInformation;
-import com.google.gwt.dev.jjs.impl.ComputeInstantiatedJsoInterfaces;
 import com.google.gwt.dev.jjs.impl.FullCompileTestBase;
 import com.google.gwt.dev.jjs.impl.GenerateJavaScriptAST;
 import com.google.gwt.dev.jjs.impl.ImplementCastsAndTypeChecks;
@@ -173,7 +172,7 @@ public class JsStackEmulatorTest extends FullCompileTestBase {
         "var stackIndex;$stack[stackIndex=++$stackDepth]=onModuleLoad;" +
         "$location[stackIndex]='EntryPoint.java:'+'6',$clinit_EntryPoint();" +
         "throw new RuntimeException(" +
-        "($tmp=($location[stackIndex]='EntryPoint.java:'+'4',thing).toString$()," +
+        "($tmp=($location[stackIndex]='EntryPoint.java:'+'4',thing).toString()," +
         "$location[stackIndex]='EntryPoint.java:'+'7',$tmp))" +
         "}");
   }
@@ -281,7 +280,6 @@ public class JsStackEmulatorTest extends FullCompileTestBase {
 
     // These passes are needed by GenerateJavaScriptAST.
     ComputeCastabilityInformation.exec(jProgram, false);
-    ComputeInstantiatedJsoInterfaces.exec(jProgram);
     ImplementCastsAndTypeChecks.exec(jProgram, false);
     ArrayNormalizer.exec(jProgram, false);
 

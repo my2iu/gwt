@@ -1,12 +1,12 @@
 /*
  * Copyright 2008 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -15,22 +15,22 @@
  */
 package java.util;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkElement;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkState;
-
 import static java.util.ConcurrentModificationDetector.checkStructuralChange;
 import static java.util.ConcurrentModificationDetector.recordLastKnownStructure;
 import static java.util.ConcurrentModificationDetector.structureChanged;
 
-import com.google.gwt.core.client.GWT;
-import com.google.gwt.core.client.impl.SpecializeMethod;
+import static javaemul.internal.InternalPreconditions.checkArgument;
+import static javaemul.internal.InternalPreconditions.checkElement;
+import static javaemul.internal.InternalPreconditions.checkState;
+
+import javaemul.internal.JsUtils;
+import javaemul.internal.annotations.SpecializeMethod;
 
 /**
  * Implementation of Map interface based on a hash table. <a
  * href="http://java.sun.com/j2se/1.5.0/docs/api/java/util/HashMap.html">[Sun
  * docs]</a>
- * 
+ *
  * @param <K> key type
  * @param <V> value type
  */
@@ -76,7 +76,7 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
    * Iterator for <code>EntrySet</code>.
    */
   private final class EntrySetIterator implements Iterator<Entry<K, V>> {
-    private Iterator<Entry<K, V>> stringMapEntries = stringMap.entries();
+    private Iterator<Entry<K, V>> stringMapEntries = stringMap.iterator();
     private Iterator<Entry<K, V>> current = stringMapEntries;
     private Iterator<Entry<K, V>> last;
 
@@ -92,7 +92,7 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
       if (current != stringMapEntries) {
         return false;
       }
-      current = hashCodeMap.entries();
+      current = hashCodeMap.iterator();
       return current.hasNext();
     }
 
@@ -119,14 +119,12 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
   /**
    * A map of integral hashCodes onto entries.
    */
-  private transient InternalJsHashCodeMap<K, V> hashCodeMap;
+  private transient InternalHashCodeMap<K, V> hashCodeMap;
 
   /**
    * A map of Strings onto values.
    */
-  private transient InternalJsStringMap<K, V> stringMap;
-
-  private int size;
+  private transient InternalStringMap<K, V> stringMap;
 
   public AbstractHashMap() {
     reset();
@@ -156,24 +154,30 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
   }
 
   private void reset() {
-    InternalJsMapFactory factory = GWT.create(InternalJsMapFactory.class);
-    hashCodeMap = factory.createJsHashCodeMap();
-    hashCodeMap.host = this;
-    stringMap = factory.createJsStringMap();
-    stringMap.host = this;
-    size = 0;
+    hashCodeMap = new InternalHashCodeMap<K, V>(this);
+    stringMap = new InternalStringMap<K, V>(this);
     structureChanged(this);
   }
 
   @SpecializeMethod(params = {String.class}, target = "hasStringValue")
   @Override
   public boolean containsKey(Object key) {
-    return key instanceof String ? hasStringValue(unsafeCast(key)) : hasHashValue(key);
+    return key instanceof String
+        ? hasStringValue(JsUtils.unsafeCastToString(key)) : hasHashValue(key);
   }
 
   @Override
   public boolean containsValue(Object value) {
-    return stringMap.containsValue(value) || hashCodeMap.containsValue(value);
+    return containsValue(value, stringMap) || containsValue(value, hashCodeMap);
+  }
+
+  private boolean containsValue(Object value, Iterable<Entry<K, V>> entries) {
+    for (Entry<K, V> entry : entries) {
+      if (equals(value, entry.getValue())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -184,34 +188,27 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
   @SpecializeMethod(params = {String.class}, target = "getStringValue")
   @Override
   public V get(Object key) {
-    return key instanceof String ? getStringValue(unsafeCast(key)) : getHashValue(key);
+    return key instanceof String
+        ? getStringValue(JsUtils.unsafeCastToString(key)) : getHashValue(key);
   }
 
   @SpecializeMethod(params = {String.class, Object.class}, target = "putStringValue")
   @Override
   public V put(K key, V value) {
-    return key instanceof String ? putStringValue(unsafeCast(key), value) : putHashValue(key, value);
+    return key instanceof String
+        ? putStringValue(JsUtils.unsafeCastToString(key), value) : putHashValue(key, value);
   }
 
   @SpecializeMethod(params = {String.class}, target = "removeStringValue")
   @Override
   public V remove(Object key) {
-    return key instanceof String ? removeStringValue(unsafeCast(key)) : removeHashValue(key);
+    return key instanceof String
+        ? removeStringValue(JsUtils.unsafeCastToString(key)) : removeHashValue(key);
   }
 
   @Override
   public int size() {
-    return size;
-  }
-
-  void elementRemoved() {
-    size--;
-    structureChanged(this);
-  }
-
-  void elementAdded() {
-    size++;
-    structureChanged(this);
+    return hashCodeMap.size() + stringMap.size();
   }
 
   /**
@@ -296,9 +293,4 @@ abstract class AbstractHashMap<K, V> extends AbstractMap<K, V> {
   private V removeStringValue(String key) {
     return key == null ? removeHashValue(null) : stringMap.remove(key);
   }
-
-  // TODO(goktug): replace unsafeCast with a real cast when the compiler can optimize it.
-  private static native String unsafeCast(Object string) /*-{
-    return string;
-  }-*/;
 }

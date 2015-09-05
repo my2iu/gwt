@@ -15,10 +15,10 @@
  */
 package java.util;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkElement;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkNotNull;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkState;
+import static javaemul.internal.InternalPreconditions.checkArgument;
+import static javaemul.internal.InternalPreconditions.checkElement;
+import static javaemul.internal.InternalPreconditions.checkNotNull;
+import static javaemul.internal.InternalPreconditions.checkState;
 
 /**
  * Skeletal implementation of the Queue interface. <a

@@ -16,18 +16,18 @@
 
 package java.util;
 
-import static com.google.gwt.core.client.impl.Coercions.ensureInt;
-
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArraySize;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkElementIndex;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkPositionIndexes;
-
-import com.google.gwt.core.client.JavaScriptObject;
-import com.google.gwt.core.client.UnsafeNativeLong;
-import com.google.gwt.lang.Array;
+import static javaemul.internal.Coercions.ensureInt;
+import static javaemul.internal.InternalPreconditions.checkArgument;
+import static javaemul.internal.InternalPreconditions.checkArraySize;
+import static javaemul.internal.InternalPreconditions.checkCriticalPositionIndexes;
+import static javaemul.internal.InternalPreconditions.checkElementIndex;
+import static javaemul.internal.InternalPreconditions.checkNotNull;
+import static javaemul.internal.InternalPreconditions.checkPositionIndexes;
 
 import java.io.Serializable;
+
+import javaemul.internal.ArrayHelper;
+import javaemul.internal.LongCompareHolder;
 
 /**
  * Utility methods related to native arrays. <a
@@ -78,7 +78,7 @@ public class Arrays {
      */
     @Override
     public Object[] toArray() {
-      return Array.clone(array);
+      return ArrayHelper.clone(array, 0, array.length);
     }
 
     /*
@@ -89,7 +89,7 @@ public class Arrays {
     public <T> T[] toArray(T[] out) {
       int size = size();
       if (out.length < size) {
-        out = Array.createFrom(out, size);
+        out = ArrayHelper.createFrom(out, size);
       }
       for (int i = 0; i < size; ++i) {
         out[i] = (T) array[i];
@@ -433,78 +433,72 @@ public class Arrays {
 
   public static <T> T[] copyOf(T[] original, int newLength) {
     checkArraySize(newLength);
-    return copyOfRange(original, 0, newLength);
+    checkNotNull(original, "original");
+    T[] clone = ArrayHelper.clone(original, 0, newLength);
+    ArrayHelper.setLength(clone, newLength);
+    return clone;
   }
 
   public static boolean[] copyOfRange(boolean[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    boolean[] copy = new boolean[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    boolean[] copy = new boolean[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static byte[] copyOfRange(byte[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    byte[] copy = new byte[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    byte[] copy = new byte[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static char[] copyOfRange(char[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    char[] copy = new char[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    char[] copy = new char[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static double[] copyOfRange(double[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    double[] copy = new double[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    double[] copy = new double[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static float[] copyOfRange(float[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    float[] copy = new float[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    float[] copy = new float[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static int[] copyOfRange(int[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    int[] copy = new int[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    int[] copy = new int[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static long[] copyOfRange(long[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    long[] copy = new long[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    long[] copy = new long[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static short[] copyOfRange(short[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    short[] copy = new short[newLength];
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    short[] copy = new short[to - from];
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
   public static <T> T[] copyOfRange(T[] original, int from, int to) {
-    int newLength = getLengthFromRange(from, to);
-    T[] copy = Array.createFrom(original, newLength);
-    System.arraycopy(original, from, copy, 0,
-        Math.min(original.length - from, newLength));
+    int len = getCopyLength(original, from, to);
+    T[] copy = ArrayHelper.createFrom(original, to - from);
+    ArrayHelper.copy(original, from, copy, 0, len);
     return copy;
   }
 
@@ -1017,7 +1011,7 @@ public class Arrays {
   }
 
   public static void sort(long[] array) {
-    nativeLongSort(array);
+    nativeLongSort(array, LongCompareHolder.getLongComparator());
   }
 
   public static void sort(long[] array, int fromIndex, int toIndex) {
@@ -1026,20 +1020,10 @@ public class Arrays {
   }
 
   public static void sort(Object[] array) {
-    // Can't use native JS sort because it isn't stable.
-
-    // -- Commented out implementation that uses the native sort with a fixup.
-    // nativeObjSort(array, 0, array.length, getNativeComparator(array,
-    //     Comparators.natural()));
     mergeSort(array, 0, array.length, Comparators.natural());
   }
 
   public static void sort(Object[] x, int fromIndex, int toIndex) {
-    // Can't use native JS sort because it isn't stable.
-
-    // -- Commented out implementation that uses the native sort with a fixup.
-    // nativeObjSort(x, fromIndex, toIndex, getNativeComparator(x,
-    //     Comparators.natural()));
     mergeSort(x, fromIndex, toIndex, Comparators.natural());
   }
 
@@ -1053,20 +1037,12 @@ public class Arrays {
   }
 
   public static <T> void sort(T[] x, Comparator<? super T> c) {
-    // Commented out implementation that uses the native sort with a fixup.
-
-    // nativeObjSort(x, 0, x.length, getNativeComparator(x, c != null ? c :
-    // Comparators.natural()));
     mergeSort(x, 0, x.length, c);
   }
 
   public static <T> void sort(T[] x, int fromIndex, int toIndex,
       Comparator<? super T> c) {
-    // Commented out implementation that uses the native sort with a fixup.
-
     checkPositionIndexes(fromIndex, toIndex, x.length);
-    // nativeObjSort(x, fromIndex, toIndex, getNativeComparator(x, c != null ? c
-    // : Comparators.natural()));
     mergeSort(x, fromIndex, toIndex, c);
   }
 
@@ -1253,9 +1229,9 @@ public class Arrays {
           b.append(toString((float[]) obj));
         } else if (obj instanceof double[]) {
           b.append(toString((double[]) obj));
+        } else {
+          assert false : "Unexpected array type: " + obj.getClass().getName();
         }
-
-        assert false : "Unexpected array type: " + obj.getClass().getName();
       } else {
         b.append(String.valueOf(obj));
       }
@@ -1264,46 +1240,13 @@ public class Arrays {
     return b.toString();
   }
 
-  private static int getLengthFromRange(int from, int to) {
-    int length = to - from;
-    checkArgument(length >= 0, "%s > %s", from, to);
-    return length;
+  private static int getCopyLength(Object array, int from, int to) {
+    checkArgument(from <= to, "%s > %s", from, to);
+    int len = ArrayHelper.getLength(array);
+    to = Math.min(to, len);
+    checkCriticalPositionIndexes(from, to, len);
+    return to - from;
   }
-
-  /**
-   * Return a JavaScript function object which will compare elements of the
-   * specified object array.
-   *
-   * Note that this function isn't currently used but is kept because the native
-   * sort/fixup approach is faster everywhere but IE. In the future, we may
-   * choose to use deferred binding in the JRE to make those platforms faster.
-   *
-   * @param array the array of objects to compare
-   * @param comp the Comparator to use to compare individual objects.
-   * @return a JavaScript function object taking indices into the array to
-   *         compare. Returns the result of the comparator, or the comparison of
-   *         the indices if the comparator indicates equality so the sort is
-   *         stable. The comparator has a property <code>swap</code> which is
-   *         true if any elements were discovered to be out of order.
-   */
-  @SuppressWarnings("unused")
-  // see above
-  private static native JavaScriptObject getNativeComparator(Object array,
-      Comparator<?> comp) /*-{
-    function compare(a, b) {
-      var elementCompare = comp.@java.util.Comparator::compare(Ljava/lang/Object;Ljava/lang/Object;)(array[a], array[b]);
-      var indexCompare = a - b;
-      // If elements compare equal, use the index comparison.
-      elementCompare = elementCompare || indexCompare;
-      // Keep track of having seen out-of-order elements.  Note that we don't
-      // have to worry about the sort algorithm comparing an element to itself
-      // since it can't be swapped anyway, so we can just check for less-than.
-      compare.swap = compare.swap || (elementCompare < 0 != indexCompare < 0);
-      return elementCompare;
-    }
-    compare.swap = false;
-    return compare;
-  }-*/;
 
   /**
    * Sort a small subsection of an array by insertion sort.
@@ -1414,23 +1357,18 @@ public class Arrays {
   /**
    * Sort an entire array of number primitives.
    */
-  @UnsafeNativeLong
-  private static native void nativeLongSort(Object array) /*-{
-    array.sort(@com.google.gwt.lang.LongLib::compare(Lcom/google/gwt/lang/LongLibBase$LongEmul;Lcom/google/gwt/lang/LongLibBase$LongEmul;));
+  private static native void nativeLongSort(Object array, Object compareFunction) /*-{
+    array.sort(compareFunction);
   }-*/;
 
   /**
    * Sort a subset of an array of number primitives.
    */
-  @UnsafeNativeLong
-  private static native void nativeLongSort(Object array, int fromIndex,
-      int toIndex) /*-{
-    var temp = array.slice(fromIndex, toIndex);
-    temp.sort(@com.google.gwt.lang.LongLib::compare(Lcom/google/gwt/lang/LongLibBase$LongEmul;Lcom/google/gwt/lang/LongLibBase$LongEmul;));
-    var n = toIndex - fromIndex;
-    @com.google.gwt.lang.Array::nativeArraycopy(Ljava/lang/Object;ILjava/lang/Object;II)(
-        temp, 0, array, fromIndex, n)
-  }-*/;
+  private static void nativeLongSort(Object array, int fromIndex, int toIndex) {
+    Object temp = ArrayHelper.unsafeClone(array, fromIndex, toIndex);
+    nativeLongSort(temp, LongCompareHolder.getLongComparator());
+    ArrayHelper.copy(temp, 0, array, fromIndex, toIndex - fromIndex);
+  }
 
   /**
    * Sort an entire array of number primitives.
@@ -1444,57 +1382,9 @@ public class Arrays {
   /**
    * Sort a subset of an array of number primitives.
    */
-  private static native void nativeNumberSort(Object array, int fromIndex,
-      int toIndex) /*-{
-    var temp = array.slice(fromIndex, toIndex);
-    temp.sort(function(a, b) {
-      return a - b;
-    });
-    var n = toIndex - fromIndex;
-    @com.google.gwt.lang.Array::nativeArraycopy(Ljava/lang/Object;ILjava/lang/Object;II)(
-        temp, 0, array, fromIndex, n)
-  }-*/;
-
-  /**
-   * Sort a subset of an array with the specified comparison function. Note that
-   * the array is also referenced via closure in the comparison function.
-   *
-   * This implementation sorts it using the native (unstable) sort using an
-   * index array and comparing the indices if they are otherwise equal, then
-   * making another pass through the array to put them into the proper order.
-   * This adds O(2*n) space for the index array and a temporary copy for
-   * re-ordering (one of which is required anyway since JavaScript can't sort
-   * subsets of an array), and the re-order pass takes O(n) time.
-   *
-   * Note that this function isn't currently used but is kept because the native
-   * sort/fixup approach is faster everywhere but IE. In the future, we may
-   * choose to use deferred binding in the JRE to make those platforms faster.
-   *
-   * @param array an array of either Java primitives or Object references
-   * @param fromIndex the start of the range to sort
-   * @param toIndex one past the end of the range to sort
-   * @param comp a JavaScript comparison function (which holds reference to the
-   *          array to sort), which will be passed indices into the array. The
-   *          comparison function must also have a property swap which is true
-   *          if any elements were out of order.
-   */
-  @SuppressWarnings("unused")
-  // Currently unused, but useful for future; see above comment.
-  private static native void nativeObjSort(Object array, int fromIndex,
-      int toIndex, JavaScriptObject comp) /*-{
-    var n = toIndex - fromIndex;
-    var indexArray = new Array(n);
-    var arrayIdx = fromIndex;
-    for ( var i = 0; i < n; ++i) {
-      indexArray[i] = arrayIdx++;
-    }
-    indexArray.sort(comp);
-    if (comp.swap) { // only reorder elements if we made a swap
-      var temp = array.slice(fromIndex, toIndex);
-      arrayIdx = fromIndex;
-      for ( var i = 0; i < n; ++i) {
-        array[arrayIdx++] = temp[indexArray[i] - fromIndex];
-      }
-    }
-  }-*/;
+  private static void nativeNumberSort(Object array, int fromIndex, int toIndex) {
+    Object temp = ArrayHelper.unsafeClone(array, fromIndex, toIndex);
+    nativeNumberSort(temp);
+    ArrayHelper.copy(temp, 0, array, fromIndex, toIndex - fromIndex);
+  }
 }

@@ -303,7 +303,7 @@ public class JavaResourceBase {
       createMockJavaResource("java.lang.String",
           "package java.lang;",
           "import java.io.Serializable;",
-          "import com.google.gwt.core.client.impl.SpecializeMethod;",
+          "import javaemul.internal.annotations.SpecializeMethod;",
           "public final class String implements Comparable<String>, CharSequence, Serializable {",
           "  public String() { }",
           "  public String(char c) { }",
@@ -345,6 +345,16 @@ public class JavaResourceBase {
           "  String[] value();",
           "}");
 
+  public static final MockJavaResource SYSTEM =
+      createMockJavaResource("java.lang.System",
+          "package java.lang;",
+          "public class System {",
+          "  public static String getProperty(String propertyName) { return null; }",
+          "  public static String getProperty(String propertyName, String defaultValue) {",
+          "    return defaultValue;",
+          "  }",
+          "}");
+
   public static final MockJavaResource THROWABLE =
       createMockJavaResource("java.lang.Throwable",
           "package java.lang;",
@@ -355,8 +365,8 @@ public class JavaResourceBase {
           "}");
 
   public static final MockJavaResource SPECIALIZE_METHOD =
-      createMockJavaResource("com.google.gwt.core.client.impl.SpecializeMethod",
-          "package com.google.gwt.core.client.impl;",
+      createMockJavaResource("javaemul.internal.annotations.SpecializeMethod",
+          "package javaemul.internal.annotations;",
           "public @interface SpecializeMethod {\n",
           "  Class<?>[] params();\n" +
           "  String target();\n",
@@ -400,7 +410,7 @@ public class JavaResourceBase {
         CLASS_NOT_FOUND_EXCEPTION, CLONEABLE, COLLECTION, COMPARABLE, DOUBLE, ENUM, EXCEPTION,
         ERROR, FUNCTIONALINTERFACE, FLOAT, INTEGER, IS_SERIALIZABLE, JAVASCRIPTEXCEPTION,
         JAVASCRIPTOBJECT, LIST, LONG, MAP, NO_CLASS_DEF_FOUND_ERROR, NUMBER, OBJECT,
-        RUNTIME_EXCEPTION, SERIALIZABLE, SHORT, STRING, STRING_BUILDER, SUPPRESS_WARNINGS,
+        RUNTIME_EXCEPTION, SERIALIZABLE, SHORT, STRING, STRING_BUILDER, SUPPRESS_WARNINGS, SYSTEM,
         THROWABLE, SPECIALIZE_METHOD, JSTYPE, JSTYPEPROTOTYPE, JSEXPORT, JSPROPERTY, JSFUNCTION};
   }
 

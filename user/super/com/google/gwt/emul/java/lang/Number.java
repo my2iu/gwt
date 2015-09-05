@@ -1,12 +1,12 @@
 /*
  * Copyright 2007 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -15,9 +15,9 @@
  */
 package java.lang;
 
-import com.google.gwt.core.client.JavaScriptObject;
-
 import java.io.Serializable;
+
+import javaemul.internal.JsUtils;
 
 /**
  * Abstract base class for numeric wrapper classes.
@@ -25,9 +25,9 @@ import java.io.Serializable;
 public abstract class Number implements Serializable {
 
   /**
-   * Stores a regular expression object to verify format of float values.
+   * Stores a regular expression object to verify the format of float values.
    */
-  protected static JavaScriptObject floatRegex;
+  private static Object floatRegex;
 
   // CHECKSTYLE_OFF: A special need to use unusual identifiers to avoid
   // introducing name collisions.
@@ -127,7 +127,7 @@ public abstract class Number implements Serializable {
 
   /**
    * @skip
-   * 
+   *
    * This function will determine the radix that the string is expressed in
    * based on the parsing rules defined in the Javadocs for Integer.decode() and
    * invoke __parseAndValidateInt.
@@ -172,7 +172,7 @@ public abstract class Number implements Serializable {
 
   /**
    * @skip
-   * 
+   *
    * This function contains common logic for parsing a String as a floating-
    * point number and validating the range.
    */
@@ -180,12 +180,16 @@ public abstract class Number implements Serializable {
     if (!__isValidDouble(s)) {
       throw NumberFormatException.forInputString(s);
     }
-    return __parseDouble(s);
+    return parseFloat(s);
   }
+
+  private static native double parseFloat(String str) /*-{
+    return parseFloat(str);
+  }-*/;
 
   /**
    * @skip
-   * 
+   *
    * This function contains common logic for parsing a String in a given radix
    * and validating the result.
    */
@@ -207,11 +211,11 @@ public abstract class Number implements Serializable {
       }
     }
 
-    int toReturn = __parseInt(s, radix);
+    int toReturn = JsUtils.parseInt(s, radix);
     // isTooLow is separated into its own variable to avoid a bug in BlackBerry OS 7. See
     // https://code.google.com/p/google-web-toolkit/issues/detail?id=7291.
     boolean isTooLow = toReturn < lowerBound;
-    if (__isNaN(toReturn)) {
+    if (Double.isNaN(toReturn)) {
       throw NumberFormatException.forInputString(s);
     } else if (isTooLow || toReturn > upperBound) {
       throw NumberFormatException.forInputString(s);
@@ -222,7 +226,7 @@ public abstract class Number implements Serializable {
 
   /**
    * @skip
-   * 
+   *
    * This function contains common logic for parsing a String in a given radix
    * and validating the result.
    */
@@ -279,14 +283,14 @@ public abstract class Number implements Serializable {
     if (head > 0) {
       // accumulate negative numbers, as -Long.MAX_VALUE == Long.MIN_VALUE + 1
       // (in other words, -Long.MIN_VALUE overflows, see issue 7308)
-      toReturn = - __parseInt(s.substring(0, head), radix);
+      toReturn = - JsUtils.parseInt(s.substring(0, head), radix);
       s = s.substring(head);
       length -= head;
       firstTime = false;
     }
 
     while (length >= maxDigits) {
-      head = __parseInt(s.substring(0, maxDigits), radix);
+      head = JsUtils.parseInt(s.substring(0, maxDigits), radix);
       s = s.substring(maxDigits);
       length -= maxDigits;
       if (!firstTime) {
@@ -300,12 +304,12 @@ public abstract class Number implements Serializable {
       }
       toReturn -= head;
     }
-    
+
     // A positive value means we overflowed Long.MIN_VALUE
     if (toReturn > 0) {
       throw NumberFormatException.forInputString(orig);
     }
-    
+
     if (!negative) {
       toReturn = -toReturn;
       // A negative value means we overflowed Long.MAX_VALUE
@@ -318,43 +322,23 @@ public abstract class Number implements Serializable {
 
   /**
    * @skip
-   */
-  private static native boolean __isNaN(double x) /*-{
-    return isNaN(x);
-  }-*/;
-
-  /**
-   * @skip
-   * 
+   *
    * @param str
-   * @return {@code true} if the string matches {@link #floatRegex}, {@code false} otherwise
+   * @return {@code true} if the string matches the float format, {@code false} otherwise
    */
-  private static native boolean __isValidDouble(String str) /*-{
-    var floatRegex = @java.lang.Number::floatRegex;
-    if (!floatRegex) {
-      // Disallow '.' with no digits on either side
-      floatRegex = @java.lang.Number::floatRegex =
-          /^\s*[+-]?(NaN|Infinity|((\d+\.?\d*)|(\.\d+))([eE][+-]?\d+)?[dDfF]?)\s*$/;
+  private static boolean __isValidDouble(String str) {
+    if (floatRegex == null) {
+      floatRegex = createFloatRegex();
     }
-    return floatRegex.test(str);
+    return regexTest(floatRegex, str);
+  }
+
+  private static native Object createFloatRegex() /*-{
+    return /^\s*[+-]?(NaN|Infinity|((\d+\.?\d*)|(\.\d+))([eE][+-]?\d+)?[dDfF]?)\s*$/;
   }-*/;
 
-  /**
-   * @skip
-   * 
-   * @return The floating-point representation of <code>str</code>.
-   */
-  private static native double __parseDouble(String str) /*-{
-    return parseFloat(str);
-  }-*/;
-
-  /**
-   * @skip
-   * 
-   * Invokes the global JS function <code>parseInt()</code>.
-   */
-  private static native int __parseInt(String s, int radix) /*-{
-    return parseInt(s, radix);
+  private static native boolean regexTest(Object regex, String value) /*-{
+    return regex.test(value);
   }-*/;
 
   // CHECKSTYLE_ON

@@ -15,6 +15,7 @@
  */
 package com.google.gwt.dev.js;
 
+import com.google.gwt.dev.common.InliningMode;
 import com.google.gwt.dev.jjs.HasSourceInfo;
 import com.google.gwt.dev.jjs.InternalCompilerException;
 import com.google.gwt.dev.jjs.SourceInfo;
@@ -268,6 +269,7 @@ public class JsInliner {
    * JsExpression can be gauged.
    */
   private static class ComplexityEstimator extends JsVisitor {
+    public static final int AVERAGE_OBFUSCATED_IDENTIFIER_LENGTH = 2;
     /**
      * The current measure of complexity. This measures the number of
      * expressions that have been encountered by the visitor.
@@ -276,17 +278,17 @@ public class JsInliner {
 
     @Override
     public void endVisit(JsArrayAccess x, JsContext ctx) {
-      complexity++;
+      complexity += "[]".length();
     }
 
     @Override
     public void endVisit(JsArrayLiteral x, JsContext ctx) {
-      complexity++;
+      complexity += x.getExpressions().size() * ",".length() + "[]".length();
     }
 
     @Override
     public void endVisit(JsBinaryOperation x, JsContext ctx) {
-      complexity++;
+      complexity += x.getOperator().getSymbol().length();
     }
 
     @Override
@@ -296,67 +298,71 @@ public class JsInliner {
 
     @Override
     public void endVisit(JsConditional x, JsContext ctx) {
-      complexity++;
+      complexity += "?:".length();
     }
 
     @Override
     public void endVisit(JsFunction x, JsContext ctx) {
-      complexity++;
+      complexity += "function ".length() + x.getParameters().size() * ",".length()
+          + "(){}".length();
     }
 
     @Override
     public void endVisit(JsInvocation x, JsContext ctx) {
-      complexity++;
+      complexity += x.getArguments().size() * ",".length() + "()".length();
     }
 
     @Override
     public void endVisit(JsNameRef x, JsContext ctx) {
-      complexity++;
+      // Average name length in obfuscated mode.
+      complexity += 2;
     }
 
     @Override
     public void endVisit(JsNew x, JsContext ctx) {
-      complexity++;
+      complexity += "new ".length() + x.getArguments().size() * ",".length() + "()".length();
     }
 
     @Override
     public void endVisit(JsNullLiteral x, JsContext ctx) {
-      complexity++;
+      complexity += "null".length();
     }
 
     @Override
     public void endVisit(JsNumberLiteral x, JsContext ctx) {
-      complexity++;
+      // Duplicate constants will be interned so they are counted as an obfuscated identifier.
+      complexity += AVERAGE_OBFUSCATED_IDENTIFIER_LENGTH;
     }
 
     @Override
     public void endVisit(JsObjectLiteral x, JsContext ctx) {
-      complexity++;
+      complexity += x.getPropertyInitializers().size() * ",:".length() + "{}".length();
     }
 
     @Override
     public void endVisit(JsPostfixOperation x, JsContext ctx) {
-      complexity++;
+      complexity += x.getOperator().getSymbol().length();
     }
 
     @Override
     public void endVisit(JsPrefixOperation x, JsContext ctx) {
-      complexity++;
+      complexity += x.getOperator().getSymbol().length();
     }
 
     @Override
     public void endVisit(JsRegExp x, JsContext ctx) {
-      complexity++;
+      complexity += x.getPattern().length();
     }
 
     @Override
     public void endVisit(JsStringLiteral x, JsContext ctx) {
-      complexity++;
+      // Duplicate constants will be interned so they are counted as an obfuscated identifier.
+      complexity += AVERAGE_OBFUSCATED_IDENTIFIER_LENGTH;
     }
 
     @Override
     public void endVisit(JsThisRef x, JsContext ctx) {
-      complexity++;
+      complexity += "this".length();
     }
 
     public int getComplexity() {
@@ -771,7 +777,7 @@ public class JsInliner {
         return;
       }
 
-      if (!program.isInliningAllowed(invokedFunction) || blacklist.contains(invokedFunction)) {
+      if (!invokedFunction.isInliningAllowed() || blacklist.contains(invokedFunction)) {
         return;
       }
 
@@ -1051,7 +1057,8 @@ public class JsInliner {
       int originalComplexity = complexity(x);
       int inlinedComplexity = complexity(op);
       double ratio = ((double) inlinedComplexity) / originalComplexity;
-      if (ratio > MAX_COMPLEXITY_INCREASE
+      if (invokedFunction.getInliningMode() != InliningMode.FORCE_INLINE
+          && ratio > MAX_COMPLEXITY_INCREASE
           && isInvokedMoreThanOnce(invokedFunction)) {
         return x;
       }
@@ -1544,12 +1551,14 @@ public class JsInliner {
   /**
    * When attempting to inline an invocation, this constant determines the
    * maximum allowable ratio of potential inlined complexity to initial
-   * complexity. This acts as a brake on very large expansions from bloating the
-   * generated output. Increasing this number will allow larger sections of
+   * complexity. Increasing this number will allow larger sections of
    * code to be inlined, but at a cost of larger JS output.
+   *
+   * The default value for this parameter is 1.0 which means that inlining only happens if it is
+   * estimated that it does not increase codesize.
    */
   private static final double MAX_COMPLEXITY_INCREASE = Double.parseDouble(System.getProperty(
-      "gwt.jsinlinerRatio", "1.2"));
+      "gwt.jsinlinerRatio", "1.0"));
 
   /**
    * Static entry point used by JavaToJavaScriptCompiler.

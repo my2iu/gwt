@@ -16,15 +16,19 @@
 
 package java.lang;
 
-import static com.google.gwt.core.client.impl.Coercions.ensureInt;
-
-import com.google.gwt.core.client.JavaScriptObject;
-import com.google.gwt.core.client.impl.DoNotInline;
+import static javaemul.internal.InternalPreconditions.checkStringBounds;
 
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.Comparator;
 import java.util.Locale;
+
+import javaemul.internal.ArrayHelper;
+import javaemul.internal.EmulatedCharset;
+import javaemul.internal.HashCodes;
+import javaemul.internal.annotations.DoNotInline;
 
 /**
  * Intrinsic string class.
@@ -84,98 +88,12 @@ public final class String implements Comparable<String>, CharSequence,
    * IMPORTANT NOTE: if newer JREs add new interfaces to String, please update
    * {@link Devirtualizer} and {@link JavaResourceBase}
    */
-
-  /**
-   * Hashcode caching for strings.
-   */
-  static final class HashCache {
-    /**
-     * The "old" cache; it will be dumped when front is full.
-     */
-    static JavaScriptObject back = JavaScriptObject.createObject();
-    /**
-     * Tracks the number of entries in front.
-     */
-    static int count = 0;
-    /**
-     * The "new" cache; it will become back when it becomes full.
-     */
-    static JavaScriptObject front = JavaScriptObject.createObject();
-    /**
-     * Pulled this number out of thin air.
-     */
-    static final int MAX_CACHE = 256;
-
-    public static native int getHashCode(String str) /*-{
-      // Accesses must to be prefixed with ':' to prevent conflict with built-in
-      // JavaScript properties.
-      var key = ':' + str;
-
-      // Check the front store.
-      var result = @java.lang.String.HashCache::front[key];
-      if (result != null) {
-        return result;
-      }
-
-      // Check the back store.
-      result = @java.lang.String.HashCache::back[key];
-      if (result == null) {
-        // Compute the value.
-        result = @java.lang.String.HashCache::compute(Ljava/lang/String;)(str);
-      }
-      // Increment can trigger the swap/flush; call after checking back but
-      // before writing to front.
-      @java.lang.String.HashCache::increment()();
-      return @java.lang.String.HashCache::front[key] = result;
-    }-*/;
-
-    static int compute(String str) {
-      int hashCode = 0;
-      int n = str.length();
-      int nBatch = n - 4;
-      int i = 0;
-
-      // Process batches of 4 characters at a time and add them to the hash coercing to 32 bits
-      while (i < nBatch) {
-        hashCode = str.charAt(i + 3)
-            + 31 * (str.charAt(i + 2)
-            + 31 * (str.charAt(i + 1)
-            + 31 * (str.charAt(i)
-            + 31 * hashCode)));
-
-        hashCode = ensureInt(hashCode); // make sure we don't overflow
-        i += 4;
-      }
-
-      // Now process the leftovers
-      while (i < n) {
-        hashCode = hashCode * 31 + str.charAt(i++);
-      }
-      hashCode = ensureInt(hashCode); // make sure we don't overflow
-
-      return hashCode;
-    }
-
-    static void increment() {
-      if (count == MAX_CACHE) {
-        back = front;
-        front = JavaScriptObject.createObject();
-        count = 0;
-      }
-      ++count;
-    }
-  }
-
   public static final Comparator<String> CASE_INSENSITIVE_ORDER = new Comparator<String>() {
+    @Override
     public int compare(String a, String b) {
       return a.compareToIgnoreCase(b);
     }
   };
-
-  // names for standard character sets that are supported
-  private static final String CHARSET_8859_1 = "ISO-8859-1";
-  private static final String CHARSET_LATIN1 = "ISO-LATIN-1";
-  private static final String CHARSET_UTF8 = "UTF-8";
 
   public static String copyValueOf(char[] v) {
     return valueOf(v);
@@ -195,12 +113,26 @@ public final class String implements Comparable<String>, CharSequence,
 
   public static String valueOf(char x[], int offset, int count) {
     int end = offset + count;
-    __checkBounds(x.length, offset, end);
-    return __valueOf(x, offset, end);
+    checkStringBounds(offset, end, x.length);
+    // Work around function.prototype.apply call stack size limits:
+    // https://code.google.com/p/v8/issues/detail?id=2896
+    // Performance: http://jsperf.com/string-fromcharcode-test/13
+    int batchSize = ArrayHelper.ARRAY_PROCESS_BATCH_SIZE;
+    String s = "";
+    for (int batchStart = offset; batchStart < end;) {
+      int batchEnd = Math.min(batchStart + batchSize, end);
+      s += fromCharCode(ArrayHelper.unsafeClone(x, batchStart, batchEnd));
+      batchStart = batchEnd;
+    }
+    return s;
   }
 
+  private static native String fromCharCode(Object array) /*-{
+    return String.fromCharCode.apply(null, array);
+  }-*/;
+
   public static String valueOf(char[] x) {
-    return __valueOf(x, 0, x.length);
+    return valueOf(x, 0, x.length);
   }
 
   public static String valueOf(double x) {
@@ -224,27 +156,6 @@ public final class String implements Comparable<String>, CharSequence,
   }
 
   // CHECKSTYLE_OFF: This class has special needs.
-
-  /**
-   * Checks that bounds are correct.
-   *
-   * @param legalCount the end of the legal range
-   * @param start must be >= 0
-   * @param end must be <= legalCount and must be >= start
-   * @throw StringIndexOutOfBoundsException if the range is not legal
-   * @skip
-   */
-  static void __checkBounds(int legalCount, int start, int end) {
-    if (start < 0) {
-      throw new StringIndexOutOfBoundsException(start);
-    }
-    if (end < start) {
-      throw new StringIndexOutOfBoundsException(end - start);
-    }
-    if (end > legalCount) {
-      throw new StringIndexOutOfBoundsException(end);
-    }
-  }
 
   /**
    * @skip
@@ -277,110 +188,7 @@ public final class String implements Comparable<String>, CharSequence,
     return replaceStr;
   }
 
-  static native String __valueOf(char x[], int start, int end) /*-{
-    // Work around function.prototype.apply call stack size limits:
-    // https://code.google.com/p/v8/issues/detail?id=2896
-    // Performance: http://jsperf.com/string-fromcharcode-test/13
-    var batchSize = @com.google.gwt.lang.Array::ARRAY_PROCESS_BATCH_SIZE;
-    var s = "";
-    for (var batchStart = start; batchStart < end;) { // increment in block
-      var batchEnd = Math.min(batchStart + batchSize, end);
-      s += String.fromCharCode.apply(null, x.slice(batchStart, batchEnd));
-      batchStart = batchEnd;
-    }
-    return s;
-  }-*/;
-
-  /**
-   * @skip
-   */
-  static String _String() {
-    return "";
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(byte[] bytes) {
-    return _String(bytes, 0, bytes.length);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(byte[] bytes, int ofs, int len) {
-    return utf8ToString(bytes, ofs, len);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(byte[] bytes, int ofs, int len, String charset)
-      throws UnsupportedEncodingException {
-    if (CHARSET_UTF8.equalsIgnoreCase(charset)) {
-      return utf8ToString(bytes, ofs, len);
-    } else if (CHARSET_8859_1.equalsIgnoreCase(charset) || CHARSET_LATIN1.equalsIgnoreCase(charset)) {
-      return latin1ToString(bytes, ofs, len);
-    } else {
-      throw new UnsupportedEncodingException("Charset " + charset
-          + " not supported");
-    }
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(byte[] bytes, String charsetName)
-      throws UnsupportedEncodingException {
-    return _String(bytes, 0, bytes.length, charsetName);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(char value[]) {
-    return valueOf(value);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(char value[], int offset, int count) {
-    return valueOf(value, offset, count);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(int[] codePoints, int offset, int count) {
-    char[] chars = new char[count * 2];
-    int charIdx = 0;
-    while (count-- > 0) {
-      charIdx += Character.toChars(codePoints[offset++], chars, charIdx);
-    }
-    return valueOf(chars, 0, charIdx);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(String other) {
-    return other;
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(StringBuffer sb) {
-    return valueOf(sb);
-  }
-
-  /**
-   * @skip
-   */
-  static String _String(StringBuilder sb) {
-    return valueOf(sb);
-  }
+ 
 
   // CHECKSTYLE_ON
 
@@ -391,47 +199,12 @@ public final class String implements Comparable<String>, CharSequence,
     return thisStr < otherStr ? -1 : 1;
   }-*/;
 
-  /**
-   * Encode a single character in UTF8.
-   *
-   * @param bytes byte array to store character in
-   * @param ofs offset into byte array to store first byte
-   * @param codePoint character to encode
-   * @return number of bytes consumed by encoding the character
-   * @throws IllegalArgumentException if codepoint >= 2^26
-   */
-  private static int encodeUtf8(byte[] bytes, int ofs, int codePoint) {
-    if (codePoint < (1 << 7)) {
-      bytes[ofs] = (byte) (codePoint & 127);
-      return 1;
-    } else if (codePoint < (1 << 11)) {
-      // 110xxxxx 10xxxxxx
-      bytes[ofs++] = (byte) (((codePoint >> 6) & 31) | 0xC0);
-      bytes[ofs] = (byte) ((codePoint & 63) | 0x80);
-      return 2;
-    } else if (codePoint < (1 << 16)) {
-      // 1110xxxx 10xxxxxx 10xxxxxx
-      bytes[ofs++] = (byte) (((codePoint >> 12) & 15) | 0xE0);
-      bytes[ofs++] = (byte) (((codePoint >> 6) & 63) | 0x80);
-      bytes[ofs] = (byte) ((codePoint & 63) | 0x80);
-      return 3;
-    } else if (codePoint < (1 << 21)) {
-      // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-      bytes[ofs++] = (byte) (((codePoint >> 18) & 7) | 0xF0);
-      bytes[ofs++] = (byte) (((codePoint >> 12) & 63) | 0x80);
-      bytes[ofs++] = (byte) (((codePoint >> 6) & 63) | 0x80);
-      bytes[ofs] = (byte) ((codePoint & 63) | 0x80);
-      return 4;
-    } else if (codePoint < (1 << 26)) {
-      // 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
-      bytes[ofs++] = (byte) (((codePoint >> 24) & 3) | 0xF8);
-      bytes[ofs++] = (byte) (((codePoint >> 18) & 63) | 0x80);
-      bytes[ofs++] = (byte) (((codePoint >> 12) & 63) | 0x80);
-      bytes[ofs++] = (byte) (((codePoint >> 6) & 63) | 0x80);
-      bytes[ofs] = (byte) ((codePoint & 63) | 0x80);
-      return 5;
+  private static Charset getCharset(String charsetName) throws UnsupportedEncodingException {
+    try {
+      return Charset.forName(charsetName);
+    } catch (UnsupportedCharsetException e) {
+      throw new UnsupportedEncodingException(charsetName);
     }
-    throw new IllegalArgumentException("Character out of range: " + codePoint);
   }
 
   private static String fromCodePoint(int codePoint) {
@@ -445,167 +218,127 @@ public final class String implements Comparable<String>, CharSequence,
     }
   }
 
-  private static byte[] getBytesLatin1(String str) {
-    int n = str.length();
-    byte[] bytes = new byte[n];
-    for (int i = 0; i < n; ++i) {
-      bytes[i] = (byte) (str.charAt(i) & 255);
-    }
-    return bytes;
-  }
-
-  private static byte[] getBytesUtf8(String str) {
-    // TODO(jat): consider using unescape(encodeURIComponent(bytes)) instead
-    int n = str.length();
-    int byteCount = 0;
-    for (int i = 0; i < n; ) {
-      int ch = str.codePointAt(i);
-      i += Character.charCount(ch);
-      if (ch < (1 << 7)) {
-        byteCount++;
-      } else if (ch < (1 << 11)) {
-        byteCount += 2;
-      } else if (ch < (1 << 16)) {
-        byteCount += 3;
-      } else if (ch < (1 << 21)) {
-        byteCount += 4;
-      } else if (ch < (1 << 26)) {
-        byteCount += 5;
-      }
-    }
-    byte[] bytes = new byte[byteCount];
-    int out = 0;
-    for (int i = 0; i < n; ) {
-      int ch = str.codePointAt(i);
-      i += Character.charCount(ch);
-      out += encodeUtf8(bytes, out, ch);
-    }
-    return bytes;
-  }
-
-  private static String latin1ToString(byte[] bytes, int ofs, int len) {
-    char[] chars = new char[len];
-    for (int i = 0; i < len; ++i) {
-      chars[i] = (char) (bytes[ofs + i] & 255);
-    }
-    return valueOf(chars);
-  }
-
-  private static String utf8ToString(byte[] bytes, int ofs, int len) {
-    // TODO(jat): consider using decodeURIComponent(escape(bytes)) instead
-    int charCount = 0;
-    for (int i = 0; i < len; ) {
-      ++charCount;
-      byte ch = bytes[ofs + i];
-      if ((ch & 0xC0) == 0x80) {
-        throw new IllegalArgumentException("Invalid UTF8 sequence");
-      } else if ((ch & 0x80) == 0) {
-        ++i;
-      } else if ((ch & 0xE0) == 0xC0) {
-        i += 2;
-      } else if ((ch & 0xF0) == 0xE0) {
-        i += 3;
-      } else if ((ch & 0xF8) == 0xF0) {
-        i += 4;
-      } else {
-        // no 5+ byte sequences since max codepoint is less than 2^21
-        throw new IllegalArgumentException("Invalid UTF8 sequence");
-      }
-      if (i > len) {
-        throw new IndexOutOfBoundsException("Invalid UTF8 sequence");
-      }
-    }
-    char[] chars = new char[charCount];
-    int outIdx = 0;
-    int count = 0;
-    for (int i = 0; i < len; ) {
-      int ch = bytes[ofs + i++];
-      if ((ch & 0x80) == 0) {
-        count = 1;
-        ch &= 127;
-      } else if ((ch & 0xE0) == 0xC0) {
-        count = 2;
-        ch &= 31;
-      } else if ((ch & 0xF0) == 0xE0) {
-        count = 3;
-        ch &= 15;
-      } else if ((ch & 0xF8) == 0xF0) {
-        count = 4;
-        ch &= 7;
-      } else if ((ch & 0xFC) == 0xF8) {
-        count = 5;
-        ch &= 3;
-      }
-      while (--count > 0) {
-        byte b = bytes[ofs + i++];
-        if ((b & 0xC0) != 0x80) {
-          throw new IllegalArgumentException("Invalid UTF8 sequence at "
-              + (ofs + i - 1) + ", byte=" + Integer.toHexString(b));
-        }
-        ch = (ch << 6) | (b & 63);
-      }
-      outIdx += Character.toChars(ch, chars, outIdx);
-    }
-    return valueOf(chars);
-  }
-
   public String() {
-    // magic delegation to _String
-    _String();
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString();
   }
 
   public String(byte[] bytes) {
-    // magic delegation to _String
-    _String(bytes);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes);
   }
 
   public String(byte[] bytes, int ofs, int len) {
-    // magic delegation to _String
-    _String(bytes, ofs, len);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes, ofs, len);
   }
 
   public String(byte[] bytes, int ofs, int len, String charsetName)
       throws UnsupportedEncodingException {
-    // magic delegation to _String
-    _String(bytes, ofs, len, charsetName);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes, ofs, len, charsetName);
+  }
+
+  public String(byte[] bytes, int ofs, int len, Charset charset) {
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes, ofs, len, charset);
   }
 
   public String(byte[] bytes, String charsetName)
       throws UnsupportedEncodingException {
-    // magic delegation to _String
-    _String(bytes, charsetName);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes, charsetName);
+  }
+
+  public String(byte[] bytes, Charset charset)
+      throws UnsupportedEncodingException {
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(bytes, charset);
   }
 
   public String(char value[]) {
-    // magic delegation to _String
-    _String(value);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(value);
   }
 
   public String(char value[], int offset, int count) {
-    // magic delegation to _String
-    _String(value, offset, count);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(value, offset, count);
   }
 
   public String(int codePoints[], int offset, int count) {
-    // magic delegation to _String
-    _String(codePoints, offset, count);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(codePoints, offset, count);
   }
 
   public String(String other) {
-    // magic delegation to _String
-    _String(other);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(other);
   }
 
   public String(StringBuffer sb) {
-    // magic delegation to _String
-    _String(sb);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(sb);
   }
 
   public String(StringBuilder sb) {
-    // magic delegation to _String
-    _String(sb);
+    /*
+     * Call to $createString(args) must be here so that the method is referenced and not
+     * pruned before new String(args) is replaced by $createString(args) by
+     * RewriteConstructorCallsForUnboxedTypes.
+     */
+    $createString(sb);
   }
 
+  @Override
   public native char charAt(int index) /*-{
     return this.charCodeAt(index);
   }-*/;
@@ -622,6 +355,7 @@ public final class String implements Comparable<String>, CharSequence,
     return Character.codePointCount(this, beginIndex, endIndex);
   }
 
+  @Override
   public int compareTo(String other) {
     return compareTo(this, other);
   }
@@ -673,17 +407,15 @@ public final class String implements Comparable<String>, CharSequence,
 
   public byte[] getBytes() {
     // default character set for GWT is UTF-8
-    return getBytesUtf8(this);
+    return getBytes(EmulatedCharset.UTF_8);
   }
 
-  public byte[] getBytes(String charSet) throws UnsupportedEncodingException {
-    if (CHARSET_UTF8.equalsIgnoreCase(charSet)) {
-      return getBytesUtf8(this);
-    }
-    if (CHARSET_8859_1.equalsIgnoreCase(charSet) || CHARSET_LATIN1.equalsIgnoreCase(charSet)) {
-      return getBytesLatin1(this);
-    }
-    throw new UnsupportedEncodingException(charSet + " is not supported");
+  public byte[] getBytes(String charsetName) throws UnsupportedEncodingException {
+    return getBytes(getCharset(charsetName));
+  }
+
+  public byte[] getBytes(Charset charset) {
+    return ((EmulatedCharset) charset).getBytes(this);
   }
 
   public void getChars(int srcBegin, int srcEnd, char[] dst, int dstBegin) {
@@ -713,7 +445,7 @@ public final class String implements Comparable<String>, CharSequence,
 
   @Override
   public int hashCode() {
-    return HashCache.getHashCode(this);
+    return HashCodes.hashCodeForString(this);
   }
 
   public int indexOf(int codePoint) {
@@ -756,6 +488,7 @@ public final class String implements Comparable<String>, CharSequence,
     return this.lastIndexOf(str, start);
   }-*/;
 
+  @Override
   public native int length() /*-{
     return this.length;
   }-*/;
@@ -930,6 +663,7 @@ public final class String implements Comparable<String>, CharSequence,
     return toffset >= 0 && __substr(this, toffset, prefix.length()).equals(prefix);
   }
 
+  @Override
   public CharSequence subSequence(int beginIndex, int endIndex) {
     return this.substring(beginIndex, endIndex);
   }
@@ -1014,4 +748,67 @@ public final class String implements Comparable<String>, CharSequence,
     }
     return start > 0 || end < length ? substring(start, end) : this;
   }
+
+  // CHECKSTYLE_OFF: Utility Methods for unboxed String.
+
+  static String $createString() {
+    return "";
+  }
+
+  static String $createString(byte[] bytes) {
+    return $createString(bytes, 0, bytes.length);
+  }
+
+  static String $createString(byte[] bytes, int ofs, int len) {
+    return $createString(bytes, ofs, len, EmulatedCharset.UTF_8);
+  }
+
+  static String $createString(byte[] bytes, int ofs, int len, String charsetName)
+      throws UnsupportedEncodingException {
+    return $createString(bytes, ofs, len, String.getCharset(charsetName));
+  }
+
+  static String $createString(byte[] bytes, int ofs, int len, Charset charset) {
+    return String.valueOf(((EmulatedCharset) charset).decodeString(bytes, ofs, len));
+  }
+
+  static String $createString(byte[] bytes, String charsetName)
+      throws UnsupportedEncodingException {
+    return $createString(bytes, 0, bytes.length, charsetName);
+  }
+
+  static String $createString(byte[] bytes, Charset charset)
+      throws UnsupportedEncodingException {
+    return $createString(bytes, 0, bytes.length, charset.name());
+  }
+
+  static String $createString(char value[]) {
+    return String.valueOf(value);
+  }
+
+  static String $createString(char value[], int offset, int count) {
+    return String.valueOf(value, offset, count);
+  }
+
+  static String $createString(int[] codePoints, int offset, int count) {
+    char[] chars = new char[count * 2];
+    int charIdx = 0;
+    while (count-- > 0) {
+      charIdx += Character.toChars(codePoints[offset++], chars, charIdx);
+    }
+    return String.valueOf(chars, 0, charIdx);
+  }
+
+  static String $createString(String other) {
+    return other;
+  }
+
+  static String $createString(StringBuffer sb) {
+    return String.valueOf(sb);
+  }
+
+  static String $createString(StringBuilder sb) {
+    return String.valueOf(sb);
+  }
+  // CHECKSTYLE_ON: end utility methods
 }

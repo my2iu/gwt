@@ -24,7 +24,7 @@ import com.google.gwt.dev.jjs.ast.JField;
 import com.google.gwt.dev.jjs.ast.JInterfaceType;
 import com.google.gwt.dev.jjs.ast.JMember;
 import com.google.gwt.dev.jjs.ast.JMethod;
-import com.google.gwt.dev.jjs.ast.JMethod.JsPropertyType;
+import com.google.gwt.dev.jjs.ast.JMethod.JsPropertyAccessorType;
 import com.google.gwt.dev.jjs.ast.JMethodCall;
 import com.google.gwt.dev.jjs.ast.JPrimitiveType;
 import com.google.gwt.dev.jjs.ast.JProgram;
@@ -95,10 +95,12 @@ public class JsInteropRestrictionChecker extends JVisitor {
     minimalRebuildCache.removeJsInteropNames(x.getName());
     currentType = x;
 
-    checkJsFunctionHierarchy(x);
-
-    if (currentType instanceof JInterfaceType) {
-      checkJsTypeHierarchy((JInterfaceType) currentType);
+    if (x.isJsFunction()) {
+      checkJsFunction(x);
+    } else if (x.isJsFunctionImplementation()) {
+      checkJsFunctionImplementation(x);
+    } else if (x.isJsType() && x instanceof JInterfaceType) {
+      checkJsInterface(x);
     } else {
       checkConstructors(x);
     }
@@ -121,7 +123,7 @@ public class JsInteropRestrictionChecker extends JVisitor {
         .filter(new Predicate<JMethod>() {
            @Override
            public boolean apply(JMethod m) {
-             return m.isExported() && m instanceof JConstructor;
+             return m.isJsConstructor();
            }
         }).toList();
 
@@ -134,7 +136,7 @@ public class JsInteropRestrictionChecker extends JVisitor {
     }
 
     final JConstructor exportedCtor = (JConstructor) exportedCtors.get(0);
-    if (!exportedCtor.getExportName().isEmpty()) {
+    if (!exportedCtor.getJsName().isEmpty()) {
       logError("Constructor '%s' cannot have an export name.", exportedCtor.getQualifiedName());
     }
 
@@ -162,10 +164,14 @@ public class JsInteropRestrictionChecker extends JVisitor {
 
   @Override
   public boolean visit(JField x, Context ctx) {
-    if (currentType == x.getEnclosingType() && x.isExported()) {
+    if (!x.isJsProperty()) {
+      return false;
+    }
+
+    if (x.needsVtable()) {
+      checkJsTypeFieldName(x, x.getJsName());
+    } else if (currentType == x.getEnclosingType()) {
       checkExportName(x);
-    } else if (x.isJsTypeMember()) {
-      checkJsTypeFieldName(x, x.getJsMemberName());
     }
 
     return false;
@@ -178,10 +184,14 @@ public class JsInteropRestrictionChecker extends JVisitor {
     }
     currentJsTypeProcessedMethods.addAll(x.getOverriddenMethods());
 
-    if (currentType == x.getEnclosingType() && x.isExported()) {
-      checkExportName(x);
-    } else if (x.isOrOverridesJsTypeMethod()) {
+    if (!x.isOrOverridesJsMethod()) {
+      return false;
+    }
+
+    if (x.needsVtable()) {
       checkJsTypeMethod(x);
+    } else if (currentType == x.getEnclosingType()) {
+      checkExportName(x);
     }
 
     if (currentType == x.getEnclosingType()) {
@@ -217,14 +227,12 @@ public class JsInteropRestrictionChecker extends JVisitor {
     }
   }
 
-  private void checkJsTypeHierarchy(JInterfaceType interfaceType) {
-    if (currentType.isJsType()) {
-      for (JDeclaredType superInterface : interfaceType.getImplements()) {
-        if (!superInterface.isJsType()) {
-          logWarning(
-              "JsType interface '%s' extends non-JsType interface '%s'. This is not recommended.",
-              interfaceType.getName(), superInterface.getName());
-        }
+  private void checkJsInterface(JDeclaredType interfaceType) {
+    for (JDeclaredType superInterface : interfaceType.getImplements()) {
+      if (!superInterface.isJsType()) {
+        logWarning(
+            "JsType interface '%s' extends non-JsType interface '%s'. This is not recommended.",
+            interfaceType.getName(), superInterface.getName());
       }
     }
   }
@@ -250,17 +258,17 @@ public class JsInteropRestrictionChecker extends JVisitor {
       return;
     }
 
-    String jsMemberName = method.getImmediateOrTransitiveJsMemberName();
+    String jsMemberName = method.getJsName();
     String qualifiedMethodName = method.getQualifiedName();
     String typeName = method.getEnclosingType().getName();
-    JsPropertyType jsPropertyType = method.getImmediateOrTransitiveJsPropertyType();
+    JsPropertyAccessorType accessorType = method.getJsPropertyAccessorType();
 
     if (jsMemberName == null) {
       logError("'%s' can't be exported because the method overloads multiple methods with "
           + "different names.", qualifiedMethodName);
     }
 
-    if (jsPropertyType == JsPropertyType.GET) {
+    if (accessorType == JsPropertyAccessorType.GETTER) {
       if (!method.getParams().isEmpty() || method.getType() == JPrimitiveType.VOID) {
         logError("There can't be void return type or any parameters for the JsProperty getter"
             + " '%s'.", qualifiedMethodName);
@@ -279,7 +287,7 @@ public class JsInteropRestrictionChecker extends JVisitor {
       }
       checkNameCollisionForGetterAndRegular(jsMemberName, typeName);
       checkInconsistentPropertyType(jsMemberName, typeName, method.getOriginalReturnType());
-    } else if (jsPropertyType == JsPropertyType.SET) {
+    } else if (accessorType == JsPropertyAccessorType.SETTER) {
       if (method.getParams().size() != 1 || method.getType() != JPrimitiveType.VOID) {
         logError("There needs to be single parameter and void return type for the JsProperty setter"
             + " '%s'.", qualifiedMethodName);
@@ -294,7 +302,7 @@ public class JsInteropRestrictionChecker extends JVisitor {
       checkNameCollisionForSetterAndRegular(jsMemberName, typeName);
       checkInconsistentPropertyType(jsMemberName, typeName,
           Iterables.getOnlyElement(method.getParams()).getType());
-    } else if (jsPropertyType == JsPropertyType.UNDEFINED) {
+    } else if (accessorType == JsPropertyAccessorType.UNDEFINED) {
       // We couldn't extract the JsPropertyType.
       logError("JsProperty '%s' doesn't follow Java Bean naming conventions.", qualifiedMethodName);
     } else {
@@ -326,29 +334,23 @@ public class JsInteropRestrictionChecker extends JVisitor {
     }
   }
 
-  private void checkJsFunctionHierarchy(JDeclaredType type) {
-    if (!type.isOrExtendsJsFunction()) {
-      return;
+  private void checkJsFunction(JDeclaredType type) {
+    if (type.getImplements().size() > 0) {
+      logError("JsFunction '%s' cannot extend other interfaces.", type);
     }
 
-    List<JInterfaceType> implementedInterfaces = type.getImplements();
-
-    if (type.isJsFunction()) {
-      if (implementedInterfaces.size() > 0) {
-        logError("JsFunction '%s' cannot extend other interfaces.", type);
-      }
-      if (type.isJsType()) {
-        logError("'%s' cannot be both a JsFunction and a JsType at the same time.", type);
-      }
-      return;
+    if (type.isJsType()) {
+      logError("'%s' cannot be both a JsFunction and a JsType at the same time.", type);
     }
 
-    if (type instanceof JInterfaceType) {
-      logError("Interface '%s' cannot extend a JsFunction interface.", type);
-      return;
+    Set<String> subTypes = jprogram.typeOracle.getSubTypeNames(type.getName());
+    if (!subTypes.isEmpty()) {
+      logError("JsFunction '%s' cannot be extended by other interfaces:%s", type, subTypes);
     }
+  }
 
-    if (implementedInterfaces.size() != 1) {
+  private void checkJsFunctionImplementation(JDeclaredType type) {
+    if (type.getImplements().size() != 1) {
       logError("JsFunction implementation '%s' cannot implement more than one interface.", type);
     }
 
@@ -360,10 +362,24 @@ public class JsInteropRestrictionChecker extends JVisitor {
     if (type.getSuperClass() != jprogram.getTypeJavaLangObject()) {
       logError("JsFunction implementation '%s' cannot extend a class.", type);
     }
+
+    Set<String> subTypes = jprogram.typeOracle.getSubTypeNames(type.getName());
+    if (!subTypes.isEmpty()) {
+      logError("Implementation of JsFunction '%s' cannot be extended by other classes:%s", type,
+          subTypes);
+    }
   }
 
   private void logError(String format, JType type) {
     logError(format, type.getName());
+  }
+
+  private void logError(String format, JType type, Set<String> subTypes) {
+    StringBuilder subTypeNames = new StringBuilder();
+    for (String typeName : subTypes) {
+      subTypeNames.append("\n\t").append(typeName);
+    }
+    logError(format, type.getName(), subTypeNames);
   }
 
   private void logError(String format, Object... args) {

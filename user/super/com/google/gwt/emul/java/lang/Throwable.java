@@ -1,12 +1,12 @@
 /*
  * Copyright 2008 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -15,11 +15,9 @@
  */
 package java.lang;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkCriticalArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkNotNull;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkState;
-
-import com.google.gwt.core.client.impl.StackTraceCreator;
+import static javaemul.internal.InternalPreconditions.checkCriticalArgument;
+import static javaemul.internal.InternalPreconditions.checkNotNull;
+import static javaemul.internal.InternalPreconditions.checkState;
 
 import java.io.PrintStream;
 import java.io.Serializable;
@@ -36,7 +34,7 @@ public class Throwable implements Serializable {
    * The client uses the generated field serializers which can use JSNI. That
    * leaves the server free to special case Throwable so that only the
    * detailMessage field is serialized.
-   * 
+   *
    * Throwable is given special treatment by server's SerializabilityUtil class
    * to ensure that only the detailMessage field is serialized. Changing the
    * field modifiers below may necessitate a change to the server's
@@ -108,14 +106,14 @@ public class Throwable implements Serializable {
 
   /**
    * Populates the stack trace information for the Throwable.
-   * 
+   *
    * @return this
    */
-  public Throwable fillInStackTrace() {
-    stackTrace = null; // Invalidate the cached trace
-    StackTraceCreator.captureStackTrace(this, detailMessage);
+  public native Throwable fillInStackTrace() /*-{
+    this.@Throwable::stackTrace = null; // Invalidate the cached trace
+    @com.google.gwt.core.client.impl.StackTraceCreator::captureStackTrace(*)(this, this.@Throwable::detailMessage);
     return this;
-  }
+  }-*/;
 
   public Throwable getCause() {
     return cause;
@@ -136,10 +134,14 @@ public class Throwable implements Serializable {
    */
   public StackTraceElement[] getStackTrace() {
     if (stackTrace == null) {
-      stackTrace = StackTraceCreator.constructJavaStackTrace(this);
+      stackTrace = constructJavaStackTrace(this);
     }
     return stackTrace;
   }
+
+  private static native StackTraceElement[] constructJavaStackTrace(Throwable t) /*-{
+    return @com.google.gwt.core.client.impl.StackTraceCreator::constructJavaStackTrace(*)(t);
+  }-*/;
 
   /**
    * Returns the array of Exception that this one suppressedExceptions.
@@ -164,14 +166,26 @@ public class Throwable implements Serializable {
   }
 
   public void printStackTrace(PrintStream out) {
-    for (Throwable t = this; t != null; t = t.getCause()) {
-      if (t != this) {
-        out.print("Caused by: ");
-      }
-      out.println(t);
-      for (StackTraceElement element : t.getStackTrace()) {
-        out.println("\tat " + element);
-      }
+    printStackTraceImpl(out, "", "");
+  }
+
+  private void printStackTraceImpl(PrintStream out, String prefix, String ident) {
+    out.println(ident + prefix + this);
+    printStackTraceItems(out, ident);
+
+    for (Throwable t : getSuppressed()) {
+      t.printStackTraceImpl(out, "Suppressed: ", "\t" + ident);
+    }
+
+    Throwable theCause = getCause();
+    if (theCause != null) {
+      theCause.printStackTraceImpl(out, "Caused by: ", ident);
+    }
+  }
+
+  private void printStackTraceItems(PrintStream out, String ident) {
+    for (StackTraceElement element : getStackTrace()) {
+      out.println(ident + "\tat " + element);
     }
   }
 

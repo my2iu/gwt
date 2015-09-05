@@ -15,11 +15,12 @@
  */
 package com.google.gwt.lang;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArrayType;
+import static javaemul.internal.InternalPreconditions.checkArrayType;
 
 import com.google.gwt.core.client.JavaScriptObject;
-import com.google.gwt.core.client.impl.DoNotInline;
-import com.google.gwt.core.client.impl.HasNoSideEffects;
+
+import javaemul.internal.annotations.DoNotInline;
+import javaemul.internal.annotations.HasNoSideEffects;
 
 /**
  * This is an intrinsic class that contains the implementation details for Java arrays. <p>
@@ -27,58 +28,24 @@ import com.google.gwt.core.client.impl.HasNoSideEffects;
  * This class should contain only static methods or fields.
  */
 public final class Array {
-  // Array element type classes
+  // Array element type classes. Needs to be in sync with enums in TypeCategory.java.
   private static final int TYPE_JAVA_OBJECT = 0;
   private static final int TYPE_JAVA_OBJECT_OR_JSO = 1;
   private static final int TYPE_JSO = 2;
   private static final int TYPE_JAVA_LANG_OBJECT = 3;
   private static final int TYPE_JAVA_LANG_STRING = 4;
-  private static final int TYPE_JS_INTERFACE = 5;
-  private static final int TYPE_PRIMITIVE_LONG = 6;
-  private static final int TYPE_PRIMITIVE_NUMBER = 7;
-  private static final int TYPE_PRIMITIVE_BOOLEAN = 8;
+  private static final int TYPE_JAVA_LANG_DOUBLE = 5;
+  private static final int TYPE_JAVA_LANG_BOOLEAN = 6;
+  private static final int TYPE_JS_PROTOTYPE = 7;
+  private static final int TYPE_JS_FUNCTION = 8;
+  private static final int TYPE_PRIMITIVE_LONG = 9;
+  private static final int TYPE_PRIMITIVE_NUMBER = 10;
+  private static final int TYPE_PRIMITIVE_BOOLEAN = 11;
 
-  private static final int ARRAY_PROCESS_BATCH_SIZE = 10000;
-
-  /**
-   * Creates a copy of the specified array.
-   */
-  public static <T> T[] clone(T[] array) {
-    return cloneSubrange(array, 0, array.length);
-  }
-
-  /**
-   * Creates a copy of a subrange of the specified array.
-   */
-  public static <T> T[] cloneSubrange(T[] array, int fromIndex, int toIndex) {
-    Object result = arraySlice(array, fromIndex, toIndex);
-    initValues(array.getClass(), Util.getCastableTypeMap(array), Array.getElementTypeId(array),
-        Array.getElementTypeCategory(array), result);
-    // implicit type arg not inferred (as of JDK 1.5.0_07)
-    return Array.<T> asArray(result);
-  }
-
-  /**
-   * Creates a new array of the exact same type and length as a given array.
-   */
-  public static <T> T[] createFrom(T[] array) {
-    return createFrom(array, array.length);
-  }
-
-  /**
-   * Creates an empty array of the exact same type as a given array, with the
-   * specified length.
-   */
-  public static <T> T[] createFrom(T[] array, int length) {
-    // TODO(rluble): The behaviour here seems erroneous as the array elements will not be
-    // initialized but left undefined. However the usages seem to be safe and changing here
-    // might have performace penalty. Maybe rename to createUninitializedFrom(), to make
-    // the meaning clearer.
-    Object result = initializeArrayElementsWithDefaults(TYPE_JAVA_OBJECT, length);
-    initValues(array.getClass(), Util.getCastableTypeMap(array), Array.getElementTypeId(array),
-        Array.getElementTypeCategory(array), result);
-    // implicit type arg not inferred (as of JDK 1.5.0_07)
-    return Array.<T> asArray(result);
+  public static <T> T[] stampJavaTypeInfo(Object array, T[] referenceType) {
+    initValues(referenceType.getClass(), Util.getCastableTypeMap(referenceType),
+        Array.getElementTypeId(referenceType), Array.getElementTypeCategory(referenceType), array);
+    return Array.asArray(array);
   }
 
   /**
@@ -158,61 +125,6 @@ public final class Array {
   }
 
   /**
-   * Copy an array using native Javascript. The destination array must be a real
-   * Java array (ie, already has the GWT type info on it). No error checking is performed -- the
-   * caller is expected to have verified everything first.
-   *
-   * @param src source array for copy
-   * @param srcOfs offset into source array
-   * @param dest destination array for copy
-   * @param destOfs offset into destination array
-   * @param len number of elements to copy
-   */
-  public static void nativeArraycopy(Object src, int srcOfs, Object dest, int destOfs, int len) {
-    nativeArraySplice(src, srcOfs, dest, destOfs, len, true);
-  }
-
-  /**
-   * Insert one array into another native Javascript. The destination array must be a real
-   * Java array (ie, already has the GWT type info on it). No error checking is performed -- the
-   * caller is expected to have verified everything first.
-   *
-   * @param src source array where the data is taken from
-   * @param srcOfs offset into source array
-   * @param dest destination array for the data to be inserted
-   * @param destOfs offset into destination array
-   * @param len number of elements to insert
-   */
-  public static void nativeArrayInsert(Object src, int srcOfs, Object dest, int destOfs,
-      int len) {
-    nativeArraySplice(src, srcOfs, dest, destOfs, len, false);
-  }
-
-  /**
-   * A replacement for Array.prototype.splice to overcome the limits imposed to the number of
-   * function parameters by browsers.
-   */
-  private static native void nativeArraySplice(
-      Object src, int srcOfs, Object dest, int destOfs, int len, boolean overwrite) /*-{
-    // Work around function.prototype.apply call stack size limits:
-    // https://code.google.com/p/v8/issues/detail?id=2896
-    // Performance: http://jsperf.com/java-system-arraycopy/2
-    if (src === dest) {
-      // copying to the same array, make a copy first
-      src = src.slice(srcOfs, srcOfs + len);
-      srcOfs = 0;
-    }
-    for (var batchStart = srcOfs, end = srcOfs + len; batchStart < end;) { // increment in block
-      var batchEnd = Math.min(batchStart + @Array::ARRAY_PROCESS_BATCH_SIZE, end);
-      len = batchEnd - batchStart;
-      Array.prototype.splice.apply(dest, [destOfs, overwrite ? len : 0]
-          .concat(src.slice(batchStart, batchEnd)));
-      batchStart = batchEnd;
-      destOfs += len;
-    }
-  }-*/;
-
-  /**
    * Performs an array assignment, after validating the type of the value being
    * stored. The form of the type check depends on the value of elementTypeId and
    * elementTypeCategory as follows:
@@ -247,6 +159,10 @@ public final class Array {
     switch (Array.getElementTypeCategory(array)) {
       case TYPE_JAVA_LANG_STRING:
         return Cast.isJavaString(value);
+      case TYPE_JAVA_LANG_DOUBLE:
+        return Cast.isJavaDouble(value);
+      case TYPE_JAVA_LANG_BOOLEAN:
+        return Cast.isJavaBoolean(value);
       case TYPE_JAVA_OBJECT:
         return Cast.canCast(value, Array.getElementTypeId(array));
       case TYPE_JSO:
@@ -258,10 +174,6 @@ public final class Array {
         return true;
     }
   }
-
-  private static native Object arraySlice(Object array, int fromIndex, int toIndex) /*-{
-    return array.slice(fromIndex, toIndex);
-  }-*/;
 
   /**
    * Use JSNI to effect a castless type change.

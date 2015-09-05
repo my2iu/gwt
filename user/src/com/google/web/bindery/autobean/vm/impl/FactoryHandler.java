@@ -24,6 +24,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Proxy;
 
 /**
  * Handles dispatches on AutoBeanFactory interfaces.
@@ -50,6 +51,11 @@ public class FactoryHandler implements InvocationHandler {
     Class<?> beanType;
     Object toWrap = null;
     String name = method.getName();
+    if (BeanMethod.OBJECT.matches(method)) {
+      // Redirect all methods of Object early on
+      return method.invoke(this, args);
+    }
+
     if (name.equals("create")) {
       // Dynamic create. Guaranteed to have at least one argument
       // create(clazz); or create(clazz, toWrap);
@@ -89,6 +95,19 @@ public class FactoryHandler implements InvocationHandler {
     }
 
     return toReturn;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other != null && Proxy.isProxyClass(other.getClass())) {
+      other = Proxy.getInvocationHandler(other);
+    }
+    return super.equals(other);
+  }
+
+  @Override
+  public final int hashCode() {
+    return super.hashCode();
   }
 
   /**

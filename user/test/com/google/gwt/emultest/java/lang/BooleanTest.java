@@ -15,6 +15,7 @@
  */
 package com.google.gwt.emultest.java.lang;
 
+import com.google.gwt.core.client.JavaScriptObject;
 import com.google.gwt.junit.client.GWTTestCase;
 
 /**
@@ -78,4 +79,42 @@ public class BooleanTest extends GWTTestCase {
     assertFalse(Boolean.valueOf(false4));
   }
 
+  public void testNPE() {
+   Boolean b = Math.random() < 0 ? Boolean.TRUE : null;
+    try {
+      assertEquals(null, b.booleanValue());
+      fail("Should have thrown exception");
+    } catch (Exception e) {
+    }
+
+    try {
+      boolean bb = b;
+      fail("Should have thrown exception" + bb);
+    } catch (Exception e) {
+    }
+  }
+
+  public void testDoesNotCastToJso() {
+    try {
+      Boolean b = true;
+      Object o = b;
+      JavaScriptObject jso = (JavaScriptObject) o;
+      fail("Boolean should fail to cast to a JSO");
+    } catch (ClassCastException e) {
+    }
+  }
+
+  public void testEqualityNormalizer() {
+    Boolean b = false;
+    if (b != null) {
+      assertEquals(b.booleanValue(), false);
+    } else {
+      fail("false should not evaluate to null");
+    }
+    Object s = "";
+    assertTrue(b != s);
+
+    Object d = 0.0;
+    assertTrue(b != d);
+  }
 }

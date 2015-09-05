@@ -48,6 +48,17 @@ public class JsFunctionTest extends GWTTestCase {
     assertEquals(12, jsFunctionInterface.foo(10));
   }
 
+  public void testJsFunctionBasic_javaAndJs() {
+    MyJsFunctionInterface jsFunctionInterface = new MyJsFunctionInterface() {
+      @Override
+      public int foo(int a) {
+        return a + 2;
+      }
+    };
+    assertEquals(12, jsFunctionInterface.foo(10));
+    assertEquals(13, callAsFunction(jsFunctionInterface, 11));
+  }
+
   public void testJsFunctionViaFunctionMethods() {
     MyJsFunctionInterface jsFunctionInterface = new MyJsFunctionInterface() {
       @Override
@@ -57,16 +68,6 @@ public class JsFunctionTest extends GWTTestCase {
     };
     assertEquals(12, callWithFunctionApply(jsFunctionInterface, 10));
     assertEquals(12, callWithFunctionCall(jsFunctionInterface, 10));
-  }
-
-  public void testJsFunctionSubImpl_js() {
-    MySubclassOfJsFunctionInterfaceImpl impl = new MySubclassOfJsFunctionInterfaceImpl();
-    assertEquals(21, callAsFunction(impl, 10));
-  }
-
-  public void testJsFunctionSubImpl_java() {
-    MySubclassOfJsFunctionInterfaceImpl impl = new MySubclassOfJsFunctionInterfaceImpl();
-    assertEquals(21, impl.foo(10));
   }
 
   public void testJsFunctionIdentity_js() {
@@ -198,6 +199,7 @@ public class JsFunctionTest extends GWTTestCase {
     Object object = createFunction();
     assertTrue(object instanceof MyJsFunctionInterface);
     assertTrue(object instanceof MyJsFunctionIdentityInterface);
+    assertTrue(object instanceof MyJsFunctionWithOnlyInstanceofReference);
     assertFalse(object instanceof MyJsFunctionInterfaceImpl);
     assertTrue(object instanceof ElementLikeJsInterface);
   }
@@ -206,6 +208,7 @@ public class JsFunctionTest extends GWTTestCase {
     Object object = createObject();
     assertFalse(object instanceof MyJsFunctionInterface);
     assertFalse(object instanceof MyJsFunctionIdentityInterface);
+    assertFalse(object instanceof MyJsFunctionWithOnlyInstanceofReference);
     assertFalse(object instanceof MyJsFunctionInterfaceImpl);
     assertTrue(object instanceof ElementLikeJsInterface);
   }
@@ -215,6 +218,7 @@ public class JsFunctionTest extends GWTTestCase {
     assertTrue(object instanceof MyJsFunctionInterface);
     assertTrue(object instanceof MyJsFunctionInterfaceImpl);
     assertTrue(object instanceof MyJsFunctionIdentityInterface);
+    assertTrue(object instanceof MyJsFunctionWithOnlyInstanceofReference);
     assertTrue(object instanceof ElementLikeJsInterface);
   }
 

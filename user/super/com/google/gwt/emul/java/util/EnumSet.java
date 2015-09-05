@@ -1,12 +1,12 @@
 /*
  * Copyright 2008 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -15,19 +15,19 @@
  */
 package java.util;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkElement;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkNotNull;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkState;
+import static javaemul.internal.InternalPreconditions.checkArgument;
+import static javaemul.internal.InternalPreconditions.checkElement;
+import static javaemul.internal.InternalPreconditions.checkNotNull;
+import static javaemul.internal.InternalPreconditions.checkState;
 
-import com.google.gwt.core.client.impl.SpecializeMethod;
-import com.google.gwt.lang.Array;
+import javaemul.internal.ArrayHelper;
+import javaemul.internal.annotations.SpecializeMethod;
 
 /**
  * A {@link java.util.Set} of {@link Enum}s. <a
  * href="http://java.sun.com/j2se/1.5.0/docs/api/java/util/EnumSet.html">[Sun
  * docs]</a>
- * 
+ *
  * @param <E> enumeration type
  */
 public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
@@ -36,7 +36,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
    * Implemented via sparse array since the set size is finite. Iteration takes
    * linear time with respect to the set of the enum rather than the number of
    * items in the set.
-   * 
+   *
    * Note: Implemented as a subclass instead of a concrete final EnumSet class.
    * This is because declaring an EnumSet.add(E) causes hosted mode to bind to
    * the tighter method rather than the bridge method; but the tighter method
@@ -56,10 +56,12 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
         findNext();
       }
 
+      @Override
       public boolean hasNext() {
         return i < capacity();
       }
 
+      @Override
       public E next() {
         checkElement(hasNext());
         last = i;
@@ -67,6 +69,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
         return set[last];
       }
 
+      @Override
       public void remove() {
         checkState(last != -1);
         assert (set[last] != null);
@@ -124,8 +127,9 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
       return false;
     }
 
+    @Override
     public EnumSet<E> clone() {
-      E[] clonedSet = Array.clone(set);
+      E[] clonedSet = ArrayHelper.clone(set, 0, set.length);
       return new EnumSetImpl<E>(all, clonedSet, size);
     }
 
@@ -172,7 +176,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
 
   public static <E extends Enum<E>> EnumSet<E> allOf(Class<E> elementType) {
     E[] all = elementType.getEnumConstants();
-    E[] set = Array.clone(all);
+    E[] set = ArrayHelper.clone(all, 0, all.length);
     return new EnumSetImpl<E>(all, set, all.length);
   }
 
@@ -180,7 +184,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
     EnumSetImpl<E> s = (EnumSetImpl<E>) other;
     E[] all = s.all;
     E[] oldSet = s.set;
-    E[] newSet = Array.createFrom(oldSet);
+    E[] newSet = ArrayHelper.createFrom(oldSet, oldSet.length);
     for (int i = 0, c = oldSet.length; i < c; ++i) {
       if (oldSet[i] == null) {
         newSet[i] = all[i];
@@ -212,7 +216,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
 
   public static <E extends Enum<E>> EnumSet<E> noneOf(Class<E> elementType) {
     E[] all = elementType.getEnumConstants();
-    return new EnumSetImpl<E>(all, Array.createFrom(all), 0);
+    return new EnumSetImpl<E>(all, ArrayHelper.createFrom(all, all.length), 0);
   }
 
   public static <E extends Enum<E>> EnumSet<E> of(E first) {
@@ -231,7 +235,7 @@ public abstract class EnumSet<E extends Enum<E>> extends AbstractSet<E> {
     checkArgument(from.compareTo(to) <= 0, "%s > %s", from, to);
 
     E[] all = from.getDeclaringClass().getEnumConstants();
-    E[] set = Array.createFrom(all);
+    E[] set = ArrayHelper.createFrom(all, all.length);
 
     // Inclusive
     int start = from.ordinal();

@@ -1,12 +1,12 @@
 /*
  * Copyright 2008 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -95,11 +95,11 @@ public final class Long extends Number implements Comparable<Long> {
   public static long parseLong(String s) throws NumberFormatException {
     return parseLong(s, 10);
   }
-  
+
   public static long parseLong(String s, int radix) throws NumberFormatException {
     return __parseAndValidateLong(s, radix);
   }
- 
+
   public static long reverse(long i) {
     int high = (int) (i >>> 32);
     int low = (int) i;
@@ -162,36 +162,42 @@ public final class Long extends Number implements Comparable<Long> {
   }
 
   public static String toString(long value, int intRadix) {
-    if (intRadix == 10 || intRadix < Character.MIN_RADIX
-        || intRadix > Character.MAX_RADIX) {
+    if (intRadix == 10 || intRadix < Character.MIN_RADIX || intRadix > Character.MAX_RADIX) {
       return String.valueOf(value);
     }
 
-    if (Integer.MIN_VALUE <= value && value <= Integer.MAX_VALUE) {
-      return Integer.toString((int) value, intRadix);
+    int intValue = (int) value;
+    if (intValue == value) {
+      return Integer.toString(intValue, intRadix);
     }
 
-    final int bufSize = 65;
-    char[] buf = new char[bufSize];
-    int pos = bufSize - 1;
-    // Cache a converted version for performance (pure long ops are faster).
-    long radix = intRadix;
-    if (value >= 0) {
-      while (value >= radix) {
-        buf[pos--] = Character.forDigit((int) (value % radix));
-        value /= radix;
-      }
-      buf[pos] = Character.forDigit((int) value);
-    } else {
-      long negRadix = -radix;
-      while (value <= negRadix) {
-        buf[pos--] = Character.forDigit(-((int) (value % radix)));
-        value /= radix;
-      }
-      buf[pos--] = Character.forDigit(-((int) value));
-      buf[pos] = '-';
+    /*
+     * If v is positive, negate it. This is the opposite of what one might expect. It is necessary
+     * because the range of the negative values is strictly larger than that of the positive values:
+     * there is no positive value corresponding to Long.MIN_VALUE.
+     */
+    boolean negative = value < 0;
+    if (!negative) {
+      value = -value;
     }
-    return String.__valueOf(buf, pos, bufSize);
+
+    int bufLen = intRadix < 8 ? 65 : 23; // Max chars in result (conservative)
+    char[] buf = new char[bufLen];
+    int cursor = bufLen;
+
+    // Convert radix to long before hand to avoid costly conversion on each iteration.
+    long radix = intRadix;
+    do {
+      long q = value / radix;
+      buf[--cursor] = Character.forDigit((int) (radix * q - value));
+      value = q;
+    } while (value != 0);
+
+    if (negative) {
+      buf[--cursor] = '-';
+    }
+
+    return String.valueOf(buf, cursor, bufLen - cursor);
   }
 
   public static Long valueOf(long i) {
@@ -229,7 +235,7 @@ public final class Long extends Number implements Comparable<Long> {
       value >>>= shift;
     } while (value != 0);
 
-    return String.__valueOf(buf, pos, bufSize);
+    return String.valueOf(buf, pos, bufSize - pos);
   }
 
   private final transient long value;
@@ -247,6 +253,7 @@ public final class Long extends Number implements Comparable<Long> {
     return (byte) value;
   }
 
+  @Override
   public int compareTo(Long b) {
     return compare(value, b.value);
   }

@@ -20,7 +20,8 @@ import com.google.gwt.core.ext.TreeLogger.Type;
 import com.google.gwt.core.ext.UnableToCompleteException;
 import com.google.gwt.dev.CompilerContext;
 import com.google.gwt.dev.MinimalRebuildCache;
-import com.google.gwt.dev.Permutation;
+import com.google.gwt.dev.cfg.ConfigurationProperty;
+import com.google.gwt.dev.cfg.Property;
 import com.google.gwt.dev.javac.CompilationProblemReporter;
 import com.google.gwt.dev.javac.CompilationState;
 import com.google.gwt.dev.javac.CompilationUnit;
@@ -28,13 +29,11 @@ import com.google.gwt.dev.javac.CompiledClass;
 import com.google.gwt.dev.jdt.RebindPermutationOracle;
 import com.google.gwt.dev.jjs.InternalCompilerException;
 import com.google.gwt.dev.jjs.PrecompilationContext;
-import com.google.gwt.dev.jjs.SourceInfo;
 import com.google.gwt.dev.jjs.SourceOrigin;
 import com.google.gwt.dev.jjs.ast.Context;
 import com.google.gwt.dev.jjs.ast.HasName;
 import com.google.gwt.dev.jjs.ast.JArrayType;
 import com.google.gwt.dev.jjs.ast.JBinaryOperation;
-import com.google.gwt.dev.jjs.ast.JBlock;
 import com.google.gwt.dev.jjs.ast.JBooleanLiteral;
 import com.google.gwt.dev.jjs.ast.JCastOperation;
 import com.google.gwt.dev.jjs.ast.JClassLiteral;
@@ -63,7 +62,6 @@ import com.google.gwt.dev.jjs.ast.JPermutationDependentValue;
 import com.google.gwt.dev.jjs.ast.JPrimitiveType;
 import com.google.gwt.dev.jjs.ast.JProgram;
 import com.google.gwt.dev.jjs.ast.JReferenceType;
-import com.google.gwt.dev.jjs.ast.JReturnStatement;
 import com.google.gwt.dev.jjs.ast.JStringLiteral;
 import com.google.gwt.dev.jjs.ast.JThisRef;
 import com.google.gwt.dev.jjs.ast.JTryStatement;
@@ -413,27 +411,35 @@ public class UnifyAst {
     private JExpression handleSystemGetProperty(JMethodCall gwtGetPropertyCall) {
       assert (gwtGetPropertyCall.getArgs().size() == 1 || gwtGetPropertyCall.getArgs().size() == 2);
       JExpression propertyNameExpression = gwtGetPropertyCall.getArgs().get(0);
-      JExpression defaultValueExpression = gwtGetPropertyCall.getArgs().size() == 2 ?
+      boolean defaultVersionCalled = gwtGetPropertyCall.getArgs().size() == 2;
+      JExpression defaultValueExpression = defaultVersionCalled ?
           gwtGetPropertyCall.getArgs().get(1) : null;
 
-      if (!(propertyNameExpression instanceof JStringLiteral) ||
-          (defaultValueExpression != null && !(defaultValueExpression instanceof JStringLiteral))) {
+      if (!(propertyNameExpression instanceof JStringLiteral)) {
         error(gwtGetPropertyCall,
-            "Only string constants may be used as arguments to System.getProperty()");
+            "Only string constants may be used as property name in System.getProperty()");
         return null;
       }
       String propertyName = ((JStringLiteral) propertyNameExpression).getValue();
 
-      if (isMultivaluedProperty(propertyName)) {
-        error(gwtGetPropertyCall,
-            "Multivalued properties are not supported by System.getProperty()");
+      if (!defaultVersionCalled && !isPropertyDefined(propertyName)) {
+        error(gwtGetPropertyCall, "Property '" + propertyName + "' is not defined.");
         return null;
       }
-      String defaultValue = defaultValueExpression == null ? null :
-          ((JStringLiteral) defaultValueExpression).getValue();
-      return JPermutationDependentValue
-          .createRuntimeProperty(program, gwtGetPropertyCall.getSourceInfo(),
-              propertyName, defaultValue);
+
+      if (isMultivaluedProperty(propertyName)) {
+        error(gwtGetPropertyCall,
+            "Property '" + propertyName + "' is multivalued. " +
+                "Multivalued properties are not supported by System.getProperty().");
+        return null;
+      }
+
+      if (defaultValueExpression != null) {
+        defaultValueExpression = accept(defaultValueExpression);
+      }
+
+      return JPermutationDependentValue.createRuntimeProperty(
+          program, gwtGetPropertyCall.getSourceInfo(), propertyName, defaultValueExpression);
     }
 
     private JExpression createRebindExpression(JMethodCall gwtCreateCall) {
@@ -591,9 +597,16 @@ public class UnifyAst {
   }
 
   private boolean isMultivaluedProperty(String propertyName) {
-    // Multivalued properties can only be Configuration properties, and those do not change between
-    // permutations.
-    return permutations[0].getProperties().getConfigurationProperties().isMultiValued(propertyName);
+    Property property = compilerContext.getModule().getProperties().find(propertyName);
+    if (!(property instanceof ConfigurationProperty)) {
+      return false;
+    }
+
+    return ((ConfigurationProperty) property).allowsMultipleValues();
+  }
+
+  private boolean isPropertyDefined(String propertyName) {
+    return compilerContext.getModule().getProperties().find(propertyName) != null;
   }
 
   private static final String CLASS_DESIRED_ASSERTION_STATUS =
@@ -727,7 +740,6 @@ public class UnifyAst {
   private MinimalRebuildCache minimalRebuildCache;
   private boolean incrementalCompile;
   private final List<String> rootTypeSourceNames = Lists.newArrayList();
-  private final Permutation[] permutations;
 
   public UnifyAst(TreeLogger logger, CompilerContext compilerContext, JProgram program,
       JsProgram jsProgram, PrecompilationContext precompilationContext) {
@@ -739,7 +751,6 @@ public class UnifyAst {
     this.program = program;
     this.jsProgram = jsProgram;
     this.rpo = precompilationContext.getRebindPermutationOracle();
-    this.permutations = precompilationContext.getPermutations();
     this.compilationState = rpo.getCompilationState();
     this.compiledClassesByInternalName = compilationState.getClassFileMap();
     this.compiledClassesBySourceName = compilationState.getClassFileMapBySource();
@@ -803,8 +814,7 @@ public class UnifyAst {
       }
 
       rootTypeBinaryNames.add(rootType.getName());
-      if (rootType.hasAnyExports() || rootType.isOrExtendsJsType()
-          || rootType.isOrExtendsJsFunction()) {
+      if (rootType.hasJsInteropEntryPoints()) {
         fullFlowIntoType(rootType);
       }
     }
@@ -974,6 +984,7 @@ public class UnifyAst {
   private void assimilateSourceUnit(CompilationUnit unit, boolean reportErrors) {
     if (unit.isError()) {
       if (failedUnits.add(unit) && reportErrors) {
+        CompilationProblemReporter.reportErrors(logger, unit, false);
         CompilationProblemReporter.logErrorTrace(logger, TreeLogger.ERROR,
             compilerContext, unit.getTypeName(), true);
         errorsFound = true;
@@ -1011,16 +1022,23 @@ public class UnifyAst {
         }
       }
     }
-    /*
-     * Eagerly instantiate any type that requires devirtualization, i.e. String and JavaScriptObject
-     * subtypes. That way we don't have to copy the exact semantics of ControlFlowAnalyzer.
-     */
+
     for (JDeclaredType t : types) {
-      if (t instanceof JClassType && requiresDevirtualization(t)) {
+      /*
+       * Eagerly instantiate any type that requires devirtualization, i.e. String and
+       * JavaScriptObject subtypes. That way we don't have to copy the exact semantics of
+       * ControlFlowAnalyzer.
+       */
+      if (requiresDevirtualization(t)) {
         instantiate(t);
       }
-      if (t.hasAnyExports() || t.isOrExtendsJsType() || t.isOrExtendsJsFunction()) {
-        instantiate(t);
+
+      /*
+       * We also flow into the types with JsInterop entry point because our first pass on root types
+       * with JsInterop entry points are missing these inner classes.
+       */
+      if (t.hasJsInteropEntryPoints()) {
+        fullFlowIntoType(t);
       }
     }
   }
@@ -1216,19 +1234,6 @@ public class UnifyAst {
     return sourceNameBasedTypeLocator;
   }
 
-  private void implementMagicMethod(JMethod method, JExpression returnValue) {
-    JMethodBody body = (JMethodBody) method.getBody();
-    JBlock block = body.getBlock();
-    SourceInfo info;
-    if (block.getStatements().size() > 0) {
-      info = block.getStatements().get(0).getSourceInfo();
-    } else {
-      info = method.getSourceInfo();
-    }
-    block.clear();
-    block.addStmt(new JReturnStatement(info, returnValue));
-  }
-
   private void initializeNameBasedLocators() {
     sourceNameBasedTypeLocator = new NameBasedTypeLocator(compiledClassesBySourceName) {
       @Override
@@ -1320,14 +1325,10 @@ public class UnifyAst {
       instantiate(translate(intf));
     }
     staticInitialize(type);
-    boolean isJsTypeOrFunction = type.isOrExtendsJsType() || type.isOrExtendsJsFunction();
 
     // Flow into any reachable virtual methods.
     for (JMethod method : type.getMethods()) {
-      if (isJsTypeOrFunction && method.canBePolymorphic()
-          || method.isExported()) {
-        // Fake a call into the method to keep it around. For JsType, JsFunction and exported
-        // methods.
+      if (method.canBeCalledExternally()) {
         flowInto(method);
         continue;
       }
@@ -1345,7 +1346,7 @@ public class UnifyAst {
     }
 
     for (JField field : type.getFields()) {
-      if (field.isExported()) {
+      if (field.canBeReferencedExternally()) {
         flowInto(field);
       }
     }
@@ -1389,15 +1390,15 @@ public class UnifyAst {
       if (methodSignature.startsWith("com.google.gwt.core.client.GWT.")
           || methodSignature.startsWith("com.google.gwt.core.shared.GWT.")) {
         // GWT.isClient, GWT.isScript, GWT.isProdMode all true.
-        implementMagicMethod(method, JBooleanLiteral.TRUE);
+        JjsUtils.replaceMethodBody(method, JBooleanLiteral.TRUE);
         continue;
       }
       assert methodSignature.startsWith("java.lang.Class.");
       if (CLASS_DESIRED_ASSERTION_STATUS.equals(methodSignature)) {
-        implementMagicMethod(method,
+        JjsUtils.replaceMethodBody(method,
             JBooleanLiteral.get(compilerContext.getOptions().isEnableAssertions()));
       } else if (CLASS_IS_CLASS_METADATA_ENABLED.equals(methodSignature)) {
-        implementMagicMethod(method,
+        JjsUtils.replaceMethodBody(method,
             JBooleanLiteral.get(!compilerContext.getOptions().isClassMetadataDisabled()));
       } else {
         assert false;

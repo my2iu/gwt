@@ -35,9 +35,9 @@ import com.google.gwt.dev.js.ast.JsStringLiteral;
 import com.google.gwt.dev.js.ast.JsUnaryOperator;
 import com.google.gwt.dev.js.ast.JsValueLiteral;
 import com.google.gwt.dev.js.ast.JsVisitor;
-import com.google.gwt.lang.LongLib;
 import com.google.gwt.user.client.rpc.IncompatibleRemoteServiceException;
 import com.google.gwt.user.client.rpc.SerializationException;
+import com.google.gwt.user.server.Base64Utils;
 
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -383,7 +383,8 @@ public final class ClientSerializationStreamReader extends
   
   @Override
   public long readLong() {    
-    return LongLib.longFromBase64(((JsStringLiteral) decoder.getValues().get(--index)).getValue());
+    return Base64Utils.longFromBase64(
+        ((JsStringLiteral) decoder.getValues().get(--index)).getValue());
   }
   
   @Override

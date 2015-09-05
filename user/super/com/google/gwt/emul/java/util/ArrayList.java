@@ -15,14 +15,14 @@
  */
 package java.util;
 
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkArgument;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkElementIndex;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkPositionIndex;
-import static com.google.gwt.core.shared.impl.InternalPreconditions.checkPositionIndexes;
-
-import com.google.gwt.lang.Array;
+import static javaemul.internal.InternalPreconditions.checkArgument;
+import static javaemul.internal.InternalPreconditions.checkElementIndex;
+import static javaemul.internal.InternalPreconditions.checkPositionIndex;
+import static javaemul.internal.InternalPreconditions.checkPositionIndexes;
 
 import java.io.Serializable;
+
+import javaemul.internal.ArrayHelper;
 
 /**
  * Resizeable array implementation of the List interface. <a
@@ -45,19 +45,6 @@ import java.io.Serializable;
 public class ArrayList<E> extends AbstractList<E> implements List<E>,
     Cloneable, RandomAccess, Serializable {
 
-  private static native void splice(Object[] array, int index, int deleteCount) /*-{
-    array.splice(index, deleteCount);
-  }-*/;
-
-  private static native void splice(Object[] array, int index, int deleteCount,
-      Object value) /*-{
-    array.splice(index, deleteCount, value);
-  }-*/;
-
-  private void insertAt(int index, Object[] values) {
-    Array.nativeArrayInsert(values, 0, array, index, values.length);
-  }
-
   /**
    * This field holds a JavaScript array.
    */
@@ -75,7 +62,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
 
   public ArrayList(Collection<? extends E> c) {
     // Avoid calling overridable methods from constructors
-    insertAt(0, c.toArray());
+    ArrayHelper.insertTo(array, 0, c.toArray());
   }
 
   public ArrayList(int initialCapacity) {
@@ -92,7 +79,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
   @Override
   public void add(int index, E o) {
     checkPositionIndex(index, array.length);
-    splice(array, index, 0, o);
+    ArrayHelper.insertTo(array, index, o);
   }
 
   @Override
@@ -102,7 +89,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
     if (len == 0) {
       return false;
     }
-    insertAt(array.length, cArray);
+    ArrayHelper.insertTo(array, array.length, cArray);
     return true;
   }
 
@@ -114,7 +101,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
     if (len == 0) {
       return false;
     }
-    insertAt(index, cArray);
+    ArrayHelper.insertTo(array, index, cArray);
     return true;
   }
 
@@ -160,7 +147,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
   @Override
   public E remove(int index) {
     E previous = get(index);
-    splice(array, index, 1);
+    ArrayHelper.removeFrom(array, index, 1);
     return previous;
   }
 
@@ -188,7 +175,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
 
   @Override
   public Object[] toArray() {
-    return Array.cloneSubrange(array, 0, array.length);
+    return ArrayHelper.clone(array, 0, array.length);
   }
 
   /*
@@ -199,7 +186,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
   public <T> T[] toArray(T[] out) {
     int size = array.length;
     if (out.length < size) {
-      out = Array.createFrom(out, size);
+      out = ArrayHelper.createFrom(out, size);
     }
     for (int i = 0; i < size; ++i) {
       out[i] = (T) array[i];
@@ -218,7 +205,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
   protected void removeRange(int fromIndex, int endIndex) {
     checkPositionIndexes(fromIndex, endIndex, array.length);
     int count = endIndex - fromIndex;
-    splice(array, fromIndex, count);
+    ArrayHelper.removeFrom(array, fromIndex, count);
   }
 
   /**
@@ -245,7 +232,7 @@ public class ArrayList<E> extends AbstractList<E> implements List<E>,
     return -1;
   }
 
-  native void setSize(int newSize) /*-{
-    this.@ArrayList::array.length = newSize;
-  }-*/;
+  void setSize(int newSize) {
+    ArrayHelper.setLength(array, newSize);
+  }
 }

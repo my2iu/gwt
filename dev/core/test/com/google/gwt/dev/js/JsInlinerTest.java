@@ -15,6 +15,10 @@
  */
 package com.google.gwt.dev.js;
 
+import com.google.gwt.core.ext.TreeLogger;
+import com.google.gwt.core.ext.UnableToCompleteException;
+import com.google.gwt.dev.common.InliningMode;
+import com.google.gwt.dev.jjs.impl.JavaToJavaScriptMap;
 import com.google.gwt.dev.jjs.impl.OptimizerStats;
 import com.google.gwt.dev.js.ast.JsContext;
 import com.google.gwt.dev.js.ast.JsFunction;
@@ -22,8 +26,12 @@ import com.google.gwt.dev.js.ast.JsModVisitor;
 import com.google.gwt.dev.js.ast.JsName;
 import com.google.gwt.dev.js.ast.JsNode;
 import com.google.gwt.dev.js.ast.JsProgram;
+import com.google.gwt.dev.js.ast.JsVisitor;
+import com.google.gwt.dev.util.UnitTestTreeLogger;
+import com.google.gwt.thirdparty.guava.common.base.Joiner;
+import com.google.gwt.thirdparty.guava.common.collect.Lists;
 
-import java.util.Arrays;
+import java.util.List;
 
 /**
  * Safety checks for JsInliner.
@@ -68,6 +76,97 @@ public class JsInlinerTest extends OptimizerTestBase {
     String input = "function a1(arg, x) { arg.x = x; return arg; }"
         + "function b1() { var x=a1({}, 10); } b1();";
     verifyNoChange(input);
+  }
+
+  public void testInlineSmallFunctions() throws Exception {
+    String input, expected;
+    // Always make more than one call, because there are special heuristics for functions that
+    // are called only once.
+
+    // Inline empty function
+    input = Joiner.on('\n').join(
+        "function setP(t, p) {}",
+        "function b1(o) {  setP(o, 1); setP(o, 2);  } b1({});");
+    expected = Joiner.on('\n').join(
+        "function b1(o){}",
+        "b1({});");
+    verifyOptimized(expected, input);
+
+    // Inline a array assignment.
+    input = Joiner.on('\n').join(
+        "function set(arr, p,  v) { arr[p] = v; }",
+        "function b1(arr) {  set(arr, \"X\", 1); set(arr, \"Y\", 1);  } b1({});");
+    expected = Joiner.on('\n').join(
+        "function b1(arr){arr['X']=1;arr['Y']=1}",
+        "b1({});");
+    verifyOptimized(expected, input);
+
+    // Inline a devirtualized setter
+    input = Joiner.on('\n').join(
+        "function setP(t, p) {t.a=p; }",
+        "function b1(o) {  setP(o, 1); setP(o, 2);  } b1({});");
+    expected = Joiner.on('\n').join(
+        "function b1(o){o.a=1; o.a=2;}",
+        "b1({});");
+    verifyOptimized(expected, input);
+
+    // Inline a devirtualized getter
+    input = Joiner.on('\n').join(
+        "function getP(t) {return t.a; }",
+        "function b1(o) {  getP(o) == getP(o);  } b1({});");
+    expected = Joiner.on('\n').join(
+        "function b1(o){o.a==o.a;}",
+        "b1({});");
+    verifyOptimized(expected, input);
+  }
+
+  public void testWithVardeclaration() throws Exception {
+    String input, expected;
+    // Always make more than one call, because there are special heuristics for functions that
+    // are called only once.
+
+    input = Joiner.on('\n').join(
+        "function a(o) { $wnd.blah(o); }",
+        "function f(t,u,b,d) {var a = t;  return a.u;}",
+        "function b1(o) { a(f(o,1,2,3)); a(f(o,1,2,5));  } b1({});");
+    expected = Joiner.on('\n').join(
+        "function d(a){$wnd.blah(a)}",
+        "function e(a){var b,c;d((b=a,b.u));d((c=a,c.u))}",
+        "e({})");
+    verifyOptimizedObfuscated(expected, input);
+  }
+
+  public void testInliningAnnotations() throws Exception {
+    String input, expected;
+    // Always make more than one call, because there are special heuristics for functions that
+    // are called only once.
+
+    // Test FORCE_INLINE
+    input = Joiner.on('\n').join(
+        "function uniqueId_forceInline(id) {return jsinterop.closure.getUniqueId(id);}",
+        "function b1() { uniqueId_forceInline('a'); uniqueId_forceInline('b');  } b1();");
+    expected = Joiner.on('\n').join(
+        "function a(){jsinterop.closure.getUniqueId('a');jsinterop.closure.getUniqueId('b')}",
+        "a();");
+    verifyOptimizedObfuscated(expected, input);
+
+    // Test DO_NOT_INLINE
+    input = Joiner.on('\n').join(
+        "function uniqueId_doNotInline(id) {return jsinterop.closure.getUniqueId(id);}",
+        "function b1() { uniqueId_doNotInline('a'); uniqueId_doNotInline('b');  } b1();");
+    expected = Joiner.on('\n').join(
+        "function b(a){return jsinterop.closure.getUniqueId(a)}",
+        "function c(){b('a');b('b')}",
+        "c();");
+    verifyOptimizedObfuscated(expected, input);
+  }
+
+  public void testCheckerError() throws Exception {
+    String input = Joiner.on('\n').join(
+        "function m_forceInline(a,b,c) {a[c]=b;}",
+        "function b1(a) { m_forceInline(a++,a++,a++);} b1();");
+    assertCheckerError(input,
+        "Function m_forceInline is marked as @ForceInline but it could not be inlined");
   }
 
   /**
@@ -274,17 +373,32 @@ public class JsInlinerTest extends OptimizerTestBase {
   }
 
   private void verifyOptimized(String expected, String input) throws Exception {
-    String actual = optimize(input, JsSymbolResolver.class, FixStaticRefsVisitor.class,
+    String actual = optimizeToSource(input, JsSymbolResolver.class, FixStaticRefsVisitor.class,
         JsInlinerProxy.class, JsUnusedFunctionRemover.class);
-    String expectedAfterParse = optimize(expected);
+    String expectedAfterParse = optimizeToSource(expected);
     assertEquals(expectedAfterParse, actual);
   }
 
   private void verifyOptimizedObfuscated(String expected, String input) throws Exception {
-    String actual = optimize(input, JsSymbolResolver.class, FixStaticRefsVisitor.class,
+    String actual = optimizeToSource(input, JsSymbolResolver.class, FixStaticRefsVisitor.class,
         JsInlinerProxy.class, JsUnusedFunctionRemover.class, JsObfuscateNamer.class);
-    String expectedAfterParse = optimize(expected);
+    String expectedAfterParse = optimizeToSource(expected);
     assertEquals(expectedAfterParse, actual);
+  }
+
+  private void assertCheckerError(String input, String error) throws Exception {
+    JsProgram optimizedProgram = optimize(input, JsSymbolResolver.class, FixStaticRefsVisitor.class,
+        JsInlinerProxy.class, JsUnusedFunctionRemover.class);
+    UnitTestTreeLogger.Builder builder = new UnitTestTreeLogger.Builder();
+    builder.setLowestLogLevel(TreeLogger.ERROR);
+    builder.expectError(error, null);
+    UnitTestTreeLogger testLogger = builder.createLogger();
+    try {
+      JsForceInliningChecker.check(testLogger, JavaToJavaScriptMap.EMPTY, optimizedProgram);
+      fail("JsForceInliningChecker should have thrown an exception");
+    } catch (UnableToCompleteException expected) {
+    }
+    testLogger.assertCorrectLogEntries();
   }
 
   /**
@@ -295,7 +409,23 @@ public class JsInlinerTest extends OptimizerTestBase {
      * Static entry point used by JavaToJavaScriptCompiler.
      */
     public static OptimizerStats exec(JsProgram program) {
-      return JsInliner.exec(program, Arrays.asList(new JsNode[]{program}));
+      final List<JsNode> inlineableFunctions = Lists.newArrayList();
+      new JsVisitor() {
+        @Override
+        public void endVisit(JsFunction x, JsContext ctx) {
+          inlineableFunctions.add(x);
+          JsName functionName = x.getName();
+          if (functionName == null) {
+            return;
+          }
+          if (functionName.getIdent().endsWith("_forceInline")) {
+            x.setInliningMode(InliningMode.FORCE_INLINE);
+          } else if (functionName.getIdent().endsWith("_doNotInline")) {
+            x.setInliningMode(InliningMode.DO_NOT_INLINE);
+          }
+        }
+      }.accept(program);
+      return JsInliner.exec(program, inlineableFunctions);
     }
   }
 

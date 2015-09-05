@@ -16,6 +16,7 @@
 
 package com.google.gwt.emultest.java.lang;
 
+import com.google.gwt.core.client.JavaScriptObject;
 import com.google.gwt.junit.client.GWTTestCase;
 
 /**
@@ -88,6 +89,45 @@ public class DoubleTest extends GWTTestCase {
     assertTrue(Double.compare(3.0, 500.0) < 0);
     assertTrue(Double.compare(500.0, 3.0) > 0);
     assertTrue(Double.compare(500.0, 500.0) == 0);
+  }
+
+  public void testNPE() {
+    Double d = Math.random() < 0 ? 42.0 : null;
+    try {
+      assertEquals(null, d.doubleValue());
+      fail("Should have thrown exception");
+    } catch (Exception e) {
+    }
+
+    try {
+      double dd = d;
+      fail("Should have thrown exception" + dd);
+    } catch (Exception e) {
+    }
+  }
+
+  public void testDoesNotCastToJso() {
+    try {
+      Double d = 1.2;
+      Object o = d;
+      JavaScriptObject jso = (JavaScriptObject) o;
+      fail("Double should fail to cast to a JSO");
+    } catch (ClassCastException e) {
+    }
+  }
+
+  public void testEqualityNormalizer() {
+    Double d = 0.0;
+    if (d != null) {
+      assertEquals(d.doubleValue(), 0.0);
+    } else {
+      fail("0.0 should not evaluate to null");
+    }
+    Object s = "0.0";
+    assertTrue(d != s);
+
+    Object b = Boolean.FALSE;
+    assertTrue(b != s);
   }
 
   public void testCompareTo() {

@@ -15,8 +15,13 @@
  */
 package com.google.gwt.emultest;
 
+import com.google.gwt.emultest.java.internal.CoercionsTest;
 import com.google.gwt.emultest.java.io.ByteArrayInputStreamTest;
+import com.google.gwt.emultest.java.io.ByteArrayOutputStreamTest;
+import com.google.gwt.emultest.java.io.FilterInputStreamTest;
+import com.google.gwt.emultest.java.io.FilterOutputStreamTest;
 import com.google.gwt.emultest.java.io.InputStreamTest;
+import com.google.gwt.emultest.java.io.OutputStreamTest;
 import com.google.gwt.emultest.java.lang.BooleanTest;
 import com.google.gwt.emultest.java.lang.ByteTest;
 import com.google.gwt.emultest.java.lang.CharacterTest;
@@ -35,6 +40,8 @@ import com.google.gwt.emultest.java.lang.ThrowableTest;
 import com.google.gwt.emultest.java.math.MathContextTest;
 import com.google.gwt.emultest.java.math.MathContextWithObfuscatedEnumsTest;
 import com.google.gwt.emultest.java.math.RoundingModeTest;
+import com.google.gwt.emultest.java.nio.charset.CharsetTest;
+import com.google.gwt.emultest.java.nio.charset.StandardCharsetsTest;
 import com.google.gwt.emultest.java.security.MessageDigestTest;
 import com.google.gwt.emultest.java.sql.SqlDateTest;
 import com.google.gwt.emultest.java.sql.SqlTimeTest;
@@ -55,9 +62,14 @@ public class EmulSuite {
     GWTTestSuite suite = new GWTTestSuite("Tests for com.google.gwt.emul.java");
 
     // $JUnit-BEGIN$
+    suite.addTestSuite(CoercionsTest.class);
     //-- java.io
     suite.addTestSuite(ByteArrayInputStreamTest.class);
+    suite.addTestSuite(ByteArrayOutputStreamTest.class);
+    suite.addTestSuite(FilterInputStreamTest.class);
+    suite.addTestSuite(FilterOutputStreamTest.class);
     suite.addTestSuite(InputStreamTest.class);
+    suite.addTestSuite(OutputStreamTest.class);
     //-- java.lang
     suite.addTestSuite(BooleanTest.class);
     suite.addTestSuite(ByteTest.class);
@@ -80,6 +92,10 @@ public class EmulSuite {
     suite.addTestSuite(RoundingModeTest.class);
     suite.addTestSuite(MathContextTest.class);
     suite.addTestSuite(MathContextWithObfuscatedEnumsTest.class);
+
+    //-- java.nio
+    suite.addTestSuite(CharsetTest.class);
+    suite.addTestSuite(StandardCharsetsTest.class);
 
     //-- java.security
     suite.addTestSuite(MessageDigestTest.class);

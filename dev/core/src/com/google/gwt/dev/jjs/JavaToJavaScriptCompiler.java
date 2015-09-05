@@ -68,7 +68,6 @@ import com.google.gwt.dev.jjs.impl.CatchBlockNormalizer;
 import com.google.gwt.dev.jjs.impl.CompileTimeConstantsReplacer;
 import com.google.gwt.dev.jjs.impl.ComputeCastabilityInformation;
 import com.google.gwt.dev.jjs.impl.ComputeExhaustiveCastabilityInformation;
-import com.google.gwt.dev.jjs.impl.ComputeInstantiatedJsoInterfaces;
 import com.google.gwt.dev.jjs.impl.ControlFlowAnalyzer;
 import com.google.gwt.dev.jjs.impl.ControlFlowRecorder;
 import com.google.gwt.dev.jjs.impl.DeadCodeElimination;
@@ -114,6 +113,7 @@ import com.google.gwt.dev.jjs.impl.ResolveRuntimeTypeReferences.IntTypeMapper;
 import com.google.gwt.dev.jjs.impl.ResolveRuntimeTypeReferences.StringTypeMapper;
 import com.google.gwt.dev.jjs.impl.ResolveRuntimeTypeReferences.TypeMapper;
 import com.google.gwt.dev.jjs.impl.ResolveRuntimeTypeReferences.TypeOrder;
+import com.google.gwt.dev.jjs.impl.RewriteConstructorCallsForUnboxedTypes;
 import com.google.gwt.dev.jjs.impl.SameParameterValueOptimizer;
 import com.google.gwt.dev.jjs.impl.SourceInfoCorrelator;
 import com.google.gwt.dev.jjs.impl.TypeCoercionNormalizer;
@@ -134,6 +134,7 @@ import com.google.gwt.dev.js.FreshNameGenerator;
 import com.google.gwt.dev.js.JsBreakUpLargeVarStatements;
 import com.google.gwt.dev.js.JsDuplicateCaseFolder;
 import com.google.gwt.dev.js.JsDuplicateFunctionRemover;
+import com.google.gwt.dev.js.JsForceInliningChecker;
 import com.google.gwt.dev.js.JsIncrementalNamer;
 import com.google.gwt.dev.js.JsInliner;
 import com.google.gwt.dev.js.JsLiteralInterner;
@@ -325,6 +326,9 @@ public final class JavaToJavaScriptCompiler {
       // TODO(stalcup): hide metrics gathering in a callback or subclass
       logger.log(TreeLogger.INFO, "Compiling permutation " + permutationId + "...");
 
+      // Rewrite calls to from boxed constructor types to specialized unboxed methods
+      RewriteConstructorCallsForUnboxedTypes.exec(jprogram);
+
       // (2) Transform unresolved Java AST to resolved Java AST
       ResolvePermutationDependentValues
           .exec(jprogram, properties, permutation.getPropertyAndBindingInfos());
@@ -393,6 +397,9 @@ public final class JavaToJavaScriptCompiler {
       // (7) Optimize the JS AST.
       final Set<JsNode> inlinableJsFunctions = jjsMapAndInlineableFunctions.getRight();
       optimizeJs(inlinableJsFunctions);
+      if (options.getOptimizationLevel() > OptionOptimize.OPTIMIZE_LEVEL_DRAFT) {
+        JsForceInliningChecker.check(logger, jjsmap, jsProgram);
+      }
 
       // TODO(stalcup): move to normalization
       // Must run before code splitter and namer.
@@ -478,7 +485,6 @@ public final class JavaToJavaScriptCompiler {
             !shouldOptimize() /* recordTrivialCasts */);
       }
 
-      ComputeInstantiatedJsoInterfaces.exec(jprogram);
       ImplementCastsAndTypeChecks.exec(jprogram, options.isCastCheckingDisabled(),
           shouldOptimize() /* pruneTrivialCasts */);
       ArrayNormalizer.exec(jprogram, options.isCastCheckingDisabled());
@@ -1179,7 +1185,7 @@ public final class JavaToJavaScriptCompiler {
         ConfigurationProperties config = new ConfigurationProperties(module);
         CodeSplitters.pickInitialLoadSequence(logger, jprogram, config);
       }
-      ImplementClassLiteralsAsFields.exec(jprogram);
+      ImplementClassLiteralsAsFields.exec(jprogram, shouldOptimize());
 
       // TODO(stalcup): hide metrics gathering in a callback or subclass
       logAstTypeMetrics(precompilationMetrics);
