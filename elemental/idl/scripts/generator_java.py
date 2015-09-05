@@ -360,7 +360,9 @@ def JavaFxTypeOrVar(dart_type, mixins):
     return dart_type
 
 def JavaFxWrapJs(dart_type, expression):
-    if dart_type in ("int", "float", "double", "long", "boolean", "String"):
+    if dart_type in ("int", "float", "double", "long"):
+      return "((Number)%s).%sValue()" % (expression, dart_type)
+    elif dart_type in ("boolean", "String"):
       return "(%s)%s" % (dart_type, expression)
     elif dart_type.startswith("Fx"):
       return "%s.wrap(%s)" % (dart_type, expression)

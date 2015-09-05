@@ -136,6 +136,7 @@ public class GwtFxBridge {
   public static JSObject entryPoint(JSObject scope, Object callback, String method, Class<?>...methodParams)
   {
     try {
+      if (callback == null) return null;
       Method m = callback.getClass().getMethod(method, methodParams);
       m.setAccessible(true);
       Object entryPointCreator = scope.eval("(function(redirector, callback, method) { var fn = function() { redirector.call(callback, method, arguments); }; fn.javaFxCallback = callback; return fn; })");

@@ -3,6 +3,7 @@ package elemental.javafx.util;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.scene.web.WebEngine;
 import netscape.javascript.JSObject;
@@ -96,7 +97,21 @@ public class GwtFxBridgeTest {
     });
     Assert.assertEquals(1, counter.get());
   }
-  
+
+  @Test
+  public void testEntryPointNull() {
+    final AtomicReference<JSObject> entryPoint = new AtomicReference<>();
+    Fx.runBlankWebPageInFx(new FxWebViewTestRunnable<RuntimeException>() {
+      @Override
+      public void run(WebEngine engine) {
+        JSObject win = (JSObject)engine.executeScript("window");
+        JSObject entry = GwtFxBridge.entryPoint(win, null, "onTimeoutHandler");
+        entryPoint.set(entry);
+      }
+    });
+    Assert.assertEquals(null, entryPoint.get());
+  }
+
   @Test
   public void testCallbacks() {
     // Create a timeout callback, and wait for it to trigger
