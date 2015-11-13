@@ -44,8 +44,6 @@ module html {
         // Extensions
                  attribute [TreatNullAs=NullString] DOMString innerHTML
                      setter raises(DOMException);
-                 attribute [TreatNullAs=NullString] DOMString innerText
-                     setter raises(DOMException);
                  attribute [TreatNullAs=NullString] DOMString outerHTML
                      setter raises(DOMException);
                  attribute [TreatNullAs=NullString] DOMString outerText
